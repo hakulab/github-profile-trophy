@@ -1,10 +1,10 @@
-import { EServiceKindError } from "./EServiceKindError.ts";
+import { EServiceKindError } from './EServiceKindError';
 
 export class ServiceError extends Error {
   constructor(message: string, kind: EServiceKindError) {
     super(message);
     this.message = message;
-    this.name = "ServiceError";
+    this.name = 'ServiceError';
     this.cause = kind;
   }
 

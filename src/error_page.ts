@@ -104,11 +104,8 @@ abstract class BaseError {
     </head>
     <body>
       <h1 style="text-align: center;">${this.status} - ${this.message}</h1>
-      <p style="text-align: center;">${this.content ?? ""}</p>
-      ${
-      this.content &&
-      '<a id="back-link" href="/">Go back</a>'
-    }
+      <p style="text-align: center;">${this.content ?? ''}</p>
+      ${this.content ? '<a id="back-link" href="/">Go back</a>' : ''}
     </body>
     </html>`;
   }
@@ -116,20 +113,20 @@ abstract class BaseError {
 
 export class Error400 extends BaseError {
   readonly status = 400;
-  readonly message = "Bad Request";
+  readonly message = 'Bad Request';
 }
 
 export class Error419 extends BaseError {
   readonly status = 419;
-  readonly message = "Rate Limit Exceeded";
+  readonly message = 'Rate Limit Exceeded';
 }
 
 export class Error404 extends BaseError {
   readonly status = 404;
-  readonly message = "Not Found";
+  readonly message = 'Not Found';
 }
 
 export class Error502 extends BaseError {
   readonly status = 502;
-  readonly message = "Bad Gateway";
+  readonly message = 'Bad Gateway';
 }

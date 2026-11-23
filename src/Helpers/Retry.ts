@@ -1,17 +1,17 @@
-import { ServiceError } from "../Types/index.ts";
-import { Logger } from "./Logger.ts";
+import { ServiceError } from '../Types/index';
+import { Logger } from './Logger';
 
-export type RetryCallbackProps = {
+export interface RetryCallbackProps {
   attempt: number;
-};
+}
 
-type callbackType<T = unknown> = (data: RetryCallbackProps) => Promise<T> | T;
+type CallbackType<T = unknown> = (data: RetryCallbackProps) => Promise<T> | T;
 
 async function* createAsyncIterable<T>(
-  callback: callbackType<T>,
+  callback: CallbackType<T>,
   retries: number,
   delay: number,
-) {
+): AsyncGenerator<T | ServiceError | null, void, unknown> {
   for (let i = 0; i < retries; i++) {
     const isLastAttempt = i === retries - 1;
     try {
@@ -26,28 +26,30 @@ async function* createAsyncIterable<T>(
 
       yield null;
       Logger.error(e);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (!isLastAttempt && delay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
   }
 }
 
 export class Retry {
-  constructor(private maxRetries = 2, private retryDelay = 1000) {}
-  async fetch<T = unknown>(
-    callback: callbackType<T>,
-  ) {
-    let lastError = null;
-    for await (
-      const callbackResult of createAsyncIterable<T>(
-        callback,
-        this.maxRetries,
-        this.retryDelay,
-      )
-    ) {
+  constructor(
+    private maxRetries = 2,
+    private retryDelay = 1000,
+  ) {}
+
+  async fetch<T = unknown>(callback: CallbackType<T>): Promise<T> {
+    let lastError: Error | null = null;
+    for await (const callbackResult of createAsyncIterable<T>(
+      callback,
+      this.maxRetries,
+      this.retryDelay,
+    )) {
       const isError = callbackResult instanceof Error;
 
       if (callbackResult && !isError) {
-        return callbackResult as T;
+        return callbackResult;
       }
 
       if (isError) {

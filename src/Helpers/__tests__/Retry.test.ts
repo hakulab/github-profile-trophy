@@ -1,65 +1,58 @@
-import { Retry } from "../Retry.ts";
-import {
-  assertEquals,
-  assertRejects,
-  assertSpyCalls,
-  spy,
-} from "../../../deps.ts";
+import { describe, expect, it, vi } from 'vitest';
 
-type MockResponse = {
+import { setLoggingEnabled } from '../Logger';
+import { Retry } from '../Retry';
+
+setLoggingEnabled(false);
+
+interface MockResponse {
   value: number;
-};
+}
 
-Deno.test("Retry.fetch", () => {
-  const retryInstance = new Retry();
-  const callback = spy(retryInstance, "fetch");
+describe('Retry', () => {
+  it('calls fetch and returns result on first try', async () => {
+    const retryInstance = new Retry(2, 0);
+    const fetchSpy = vi.spyOn(retryInstance, 'fetch');
 
-  retryInstance.fetch<MockResponse>(() => {
-    return { value: 1 };
+    const result = await retryInstance.fetch<MockResponse>(() => ({ value: 1 }));
+
+    expect(result).toEqual({ value: 1 });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  assertSpyCalls(callback, 1);
-});
+  it('retries synchronous throwing callbacks up to maxRetries', async () => {
+    let countErrors = 0;
 
-Deno.test("Should retry", async () => {
-  let countErrors = 0;
+    const callbackError = () => {
+      countErrors++;
+      throw new Error('Panic! Threw Error');
+    };
+    const retries = 3;
+    const retryInstance = new Retry(retries, 0);
 
-  const callbackError = () => {
-    countErrors++;
-    throw new Error("Panic! Threw Error");
-  };
-  const retries = 3;
-  const retryInstance = new Retry(retries);
+    await expect(retryInstance.fetch<MockResponse>(callbackError)).rejects.toThrow(
+      `Max retries (${retries}) exceeded.`,
+    );
+    expect(countErrors).toBe(3);
+  });
 
-  await assertRejects(
-    () => {
-      return retryInstance.fetch<MockResponse>(callbackError);
-    },
-    Error,
-    `Max retries (${retries}) exceeded.`,
-  );
+  it('retries asynchronous rejecting callbacks up to maxRetries', async () => {
+    let countErrors = 0;
+    const callbackError = async () => {
+      countErrors++;
+      await new Promise((_, reject) =>
+        setTimeout(() => {
+          reject(new Error('boom'));
+        }, 10),
+      );
+    };
 
-  assertEquals(countErrors, 3);
-});
+    const retries = 3;
+    const retryInstance = new Retry(retries, 0);
 
-Deno.test("Should retry the asyncronous callback", async () => {
-  let countErrors = 0;
-  const callbackError = async () => {
-    countErrors++;
-    // Mock request in callback
-    await new Promise((_, reject) => setTimeout(reject, 100));
-  };
-
-  const retries = 3;
-  const retryInstance = new Retry(retries);
-
-  await assertRejects(
-    () => {
-      return retryInstance.fetch(callbackError);
-    },
-    Error,
-    `Max retries (${retries}) exceeded.`,
-  );
-
-  assertEquals(countErrors, 3);
+    await expect(retryInstance.fetch(callbackError)).rejects.toThrow(
+      `Max retries (${retries}) exceeded.`,
+    );
+    expect(countErrors).toBe(3);
+  });
 });

@@ -1,22 +1,22 @@
-export type GithubError = {
+export interface GithubError {
   message: string;
   type: string;
-};
+}
 
-export type GithubErrorResponse = {
+export interface GithubErrorResponse {
   errors: GithubError[];
-};
+}
 
-export type GithubExceedError = {
+export interface GithubExceedError {
   documentation_url: string;
   message: string;
-};
+}
 
-export type QueryDefaultResponse<T = unknown> = {
+export interface QueryDefaultResponse<T = unknown> {
   data: {
     data: T;
     errors?: GithubError[];
     message?: string;
     documentation_url?: string;
   };
-};
+}

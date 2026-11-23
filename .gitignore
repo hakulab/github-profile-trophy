@@ -1,6 +1,21 @@
-.vscode
+# Node.js
+node_modules/
+coverage/
+
+# Nix
+.direnv/
+/.pre-commit-config.yaml
+
+# Wrangler
+.dev.vars*
+.wrangler/
+
+# Editor / OS / assistant local settings
+.agents/plans
+.claude/agent-memory-local
+.claude/plans
+.claude/settings.local.json
 .env
-.idea
-deno.lock
-*.sh
+.idea/
+.vscode/
 **/.DS_Store

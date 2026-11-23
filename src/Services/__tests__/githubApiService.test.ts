@@ -1,139 +1,125 @@
-import { GithubApiService } from "../GithubApiService.ts";
-import { assertEquals, returnsNext, soxa, stub } from "../../../deps.ts";
-import { GitHubUserRepository } from "../../user_info.ts";
+import { describe, expect, it, vi } from 'vitest';
 
-const rateLimitMock = await import("../__mocks__/rateLimitMock.json", {
-  with: { type: "json" },
-});
+import notFoundUserMock from '../__mocks__/notFoundUserMock.json';
+import rateLimitMock from '../__mocks__/rateLimitMock.json';
+import successGithubResponse from '../__mocks__/successGithubResponse.json';
+import { setLoggingEnabled } from '../../Helpers/Logger';
+import { EServiceKindError, ServiceError } from '../../Types/index';
+import { type GitHubUserRepository } from '../../user_info';
+import { GithubApiService } from '../GithubApiService';
 
-const successGithubResponseMock = await import(
-  "../__mocks__/successGithubResponse.json",
-  { with: { type: "json" } }
-);
+setLoggingEnabled(false);
 
-const notFoundGithubResponseMock = await import(
-  "../__mocks__/notFoundUserMock.json",
-  { with: { type: "json" } }
-);
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
 
-import { ServiceError } from "../../Types/index.ts";
+describe('GithubApiService', () => {
+  it('returns user repository data on the first attempt', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(successGithubResponse.data));
+    const provider = new GithubApiService(
+      { GITHUB_TOKEN1: 'token-1', GITHUB_TOKEN2: 'token-2' },
+      { retryDelay: 0, fetchImpl: fetchMock },
+    );
 
-// Unfortunatelly, The spy is a global instance
-// We can't reset mock as Jest does.
-stub(
-  soxa,
-  "post",
-  returnsNext([
-    // Should get data in first try
-    new Promise((resolve) => {
-      resolve(successGithubResponseMock.default);
-    }),
-    // Should throw NOT FOUND (requestUserInfo makes 1 combined API call)
-    // Each call makes 2 attempts (one per token), so 2 promises total
-    new Promise((resolve) => {
-      resolve(notFoundGithubResponseMock.default);
-    }),
-    new Promise((resolve) => {
-      resolve(notFoundGithubResponseMock.default);
-    }),
-    // Should throw NOT FOUND even if request the user only
-    new Promise((resolve) => {
-      resolve(notFoundGithubResponseMock.default);
-    }),
-    new Promise((resolve) => {
-      resolve(notFoundGithubResponseMock.default);
-    }),
-    // Should throw RATE LIMIT
-    new Promise((resolve) => {
-      resolve(rateLimitMock.default.rate_limit);
-    }),
-    new Promise((resolve) => {
-      resolve(rateLimitMock.default.rate_limit);
-    }),
-    // Should throw RATE LIMIT Exceed
-    new Promise((resolve) => {
-      resolve(rateLimitMock.default.rate_limit);
-    }),
-    new Promise((resolve) => {
-      resolve(rateLimitMock.default.exceeded);
-    }),
-  ]),
-);
+    const data = (await provider.requestUserRepository('test')) as GitHubUserRepository;
 
-Deno.test("Should get data in first try", async () => {
-  const provider = new GithubApiService();
+    expect(data.repositories.totalCount).toBe(128);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 
-  const data = await provider.requestUserRepository(
-    "test",
-  ) as GitHubUserRepository;
+  it('rotates from GITHUB_TOKEN1 to GITHUB_TOKEN2 on failure', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(rateLimitMock.rate_limit.data))
+      .mockResolvedValueOnce(jsonResponse(successGithubResponse.data));
 
-  assertEquals(data.repositories.totalCount, 128);
-});
+    const provider = new GithubApiService(
+      { GITHUB_TOKEN1: 'token-1', GITHUB_TOKEN2: 'token-2' },
+      { retryDelay: 0, fetchImpl: fetchMock },
+    );
 
-//Deno.test("Should get data in second Retry", async () => {
-//  const provider = new GithubApiService();
-//
-//  const data = await provider.requestUserRepository(
-//    "test",
-//  ) as GitHubUserRepository;
-//
-//  assertEquals(data.repositories.totalCount, 128);
-//});
+    const data = (await provider.requestUserRepository('test')) as GitHubUserRepository;
 
-Deno.test("Should throw NOT FOUND", async () => {
-  const provider = new GithubApiService();
-  let error: unknown = null;
+    expect(data.repositories.totalCount).toBe(128);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstHeaders = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    const secondHeaders = fetchMock.mock.calls[1]?.[1]?.headers as Record<string, string>;
+    expect(firstHeaders.Authorization).toBe('bearer token-1');
+    expect(secondHeaders.Authorization).toBe('bearer token-2');
+  });
 
-  try {
-    error = await provider.requestUserInfo("test");
-  } catch (e) {
-    error = e;
-  }
+  it('returns 404 ServiceError when user is not found via requestUserInfo', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(notFoundUserMock.data))
+      .mockResolvedValueOnce(jsonResponse(notFoundUserMock.data));
 
-  assertEquals((error as ServiceError).code, 404);
-  assertEquals(error instanceof ServiceError, true);
-});
-Deno.test("Should throw NOT FOUND even if request the user only", async () => {
-  const provider = new GithubApiService();
-  let error: unknown = null;
+    const provider = new GithubApiService(
+      { GITHUB_TOKEN1: 'token-1', GITHUB_TOKEN2: 'token-2' },
+      { retryDelay: 0, fetchImpl: fetchMock },
+    );
 
-  try {
-    error = await provider.requestUserRepository("test");
-  } catch (e) {
-    error = e;
-  }
+    const error = await provider.requestUserInfo('test');
 
-  assertEquals((error as ServiceError).code, 404);
-  assertEquals(error instanceof ServiceError, true);
-});
+    expect(error).toBeInstanceOf(ServiceError);
+    expect((error as ServiceError).code).toBe(404);
+  });
 
-// The assertRejects() assertion is a little more complicated
-// mainly because it deals with Promises.
-// https://docs.deno.com/runtime/manual/basics/testing/assertions#throws
-Deno.test("Should throw RATE LIMIT", async () => {
-  const provider = new GithubApiService();
-  let error: unknown = null;
+  it('returns 404 ServiceError when user is not found via requestUserRepository', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(notFoundUserMock.data))
+      .mockResolvedValueOnce(jsonResponse(notFoundUserMock.data));
 
-  try {
-    error = await provider.requestUserRepository("test");
-  } catch (e) {
-    error = e;
-  }
+    const provider = new GithubApiService(
+      { GITHUB_TOKEN1: 'token-1', GITHUB_TOKEN2: 'token-2' },
+      { retryDelay: 0, fetchImpl: fetchMock },
+    );
 
-  assertEquals((error as ServiceError).code, 419);
-  assertEquals(error instanceof ServiceError, true);
-});
+    const error = await provider.requestUserRepository('test');
 
-Deno.test("Should throw RATE LIMIT Exceed", async () => {
-  const provider = new GithubApiService();
-  let error: unknown = null;
+    expect(error).toBeInstanceOf(ServiceError);
+    expect((error as ServiceError).code).toBe(404);
+  });
 
-  try {
-    error = await provider.requestUserRepository("test");
-  } catch (e) {
-    error = e;
-  }
+  it('returns 419 ServiceError on GraphQL rate limit', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(rateLimitMock.rate_limit.data))
+      .mockResolvedValueOnce(jsonResponse(rateLimitMock.rate_limit.data));
 
-  assertEquals((error as ServiceError).code, 419);
-  assertEquals(error instanceof ServiceError, true);
+    const provider = new GithubApiService(
+      { GITHUB_TOKEN1: 'token-1', GITHUB_TOKEN2: 'token-2' },
+      { retryDelay: 0, fetchImpl: fetchMock },
+    );
+
+    const error = await provider.requestUserRepository('test');
+
+    expect(error).toBeInstanceOf(ServiceError);
+    expect((error as ServiceError).code).toBe(419);
+    expect((error as ServiceError).cause).toBe(EServiceKindError.RATE_LIMIT);
+  });
+
+  it('returns 419 ServiceError on secondary rate limit exceeded', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(rateLimitMock.rate_limit.data))
+      .mockResolvedValueOnce(jsonResponse(rateLimitMock.exceeded.data, 403));
+
+    const provider = new GithubApiService(
+      { GITHUB_TOKEN1: 'token-1', GITHUB_TOKEN2: 'token-2' },
+      { retryDelay: 0, fetchImpl: fetchMock },
+    );
+
+    const error = await provider.requestUserRepository('test');
+
+    expect(error).toBeInstanceOf(ServiceError);
+    expect((error as ServiceError).code).toBe(419);
+  });
 });

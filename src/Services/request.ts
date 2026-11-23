@@ -1,55 +1,80 @@
-import { soxa } from "../../deps.ts";
-import {
-  EServiceKindError,
-  GithubError,
-  QueryDefaultResponse,
-  ServiceError,
-} from "../Types/index.ts";
+import { EServiceKindError, ServiceError, type GithubError } from '../Types/index';
+import { CONSTANTS } from '../utils';
+
+export type FetchLike = typeof fetch;
+
+export interface RequestGithubOptions {
+  apiUrl?: string;
+  token?: string;
+  fetchImpl?: FetchLike;
+}
+
+interface GraphQLPayload<T> {
+  data?: {
+    user?: T | null;
+  };
+  errors?: GithubError[];
+  message?: string;
+  documentation_url?: string;
+}
 
 export async function requestGithubData<T = unknown>(
   query: string,
-  variables: { [key: string]: string },
-  token = "",
-) {
-  const response = await soxa.post("", {}, {
-    data: { query, variables },
-    headers: {
-      Authorization: `bearer ${token}`,
-    },
-  }) as QueryDefaultResponse<{ user: T }>;
-  const responseData = response.data;
+  variables: Record<string, string>,
+  options: RequestGithubOptions = {},
+): Promise<T> {
+  const apiUrl = options.apiUrl ?? CONSTANTS.DEFAULT_GITHUB_API;
+  const token = options.token ?? '';
+  const fetchImpl = options.fetchImpl ?? fetch;
 
-  if (responseData?.errors?.length) {
-    console.error(
-      "GitHub GraphQL errors:",
-      JSON.stringify(responseData.errors, null, 2),
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'User-Agent': 'github-profile-trophy',
+  };
+  if (token) {
+    headers.Authorization = `bearer ${token}`;
+  }
+
+  const response = await fetchImpl(apiUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ query, variables }),
+  });
+
+  let responseData: GraphQLPayload<T>;
+  try {
+    responseData = await response.json<GraphQLPayload<T>>();
+  } catch {
+    throw new ServiceError(
+      `GitHub API returned non-JSON response (HTTP ${response.status})`,
+      EServiceKindError.UPSTREAM,
     );
+  }
+
+  if (responseData.errors?.length) {
+    console.error('GitHub GraphQL errors:', JSON.stringify(responseData.errors, null, 2));
 
     throw new ServiceError(
-      responseData.errors
-        .map((error) => error.message)
-        .join("; "),
+      responseData.errors.map((error) => error.message).join('; '),
       getGraphQLErrorKind(responseData.errors),
     );
   }
 
-  if (responseData?.data?.user) {
+  if (responseData.data?.user) {
     return responseData.data.user;
   }
 
-  throw handleError(responseData);
+  throw handleError(responseData, response.status);
 }
 
 function getGraphQLErrorKind(errors: GithubError[]): EServiceKindError {
   const errorTypes = errors.map((error) => error.type);
 
-  if (
-    errorTypes.some((type) => type?.includes(EServiceKindError.RATE_LIMIT))
-  ) {
+  if (errorTypes.some((type) => type.includes(EServiceKindError.RATE_LIMIT))) {
     return EServiceKindError.RATE_LIMIT;
   }
 
-  if (errorTypes.every((type) => type === EServiceKindError.NOT_FOUND)) {
+  if (errorTypes.every((type) => type === (EServiceKindError.NOT_FOUND as string))) {
     return EServiceKindError.NOT_FOUND;
   }
 
@@ -63,31 +88,32 @@ function handleError(
     message?: string;
     documentation_url?: string;
   },
+  status: number,
 ): ServiceError {
   let isRateLimitExceeded = false;
-  const arrayErrors = responseData?.errors || [];
+  const arrayErrors = responseData.errors ?? [];
 
-  if (Array.isArray(arrayErrors) && arrayErrors.length > 0) {
+  if (arrayErrors.length > 0) {
     isRateLimitExceeded = arrayErrors.some((error) =>
-      error.type.includes(EServiceKindError.RATE_LIMIT)
+      error.type.includes(EServiceKindError.RATE_LIMIT),
     );
   }
 
-  if (responseData?.message) {
-    isRateLimitExceeded = responseData.message.toLowerCase().includes(
-      "rate limit",
+  if (responseData.message) {
+    isRateLimitExceeded =
+      isRateLimitExceeded || responseData.message.toLowerCase().includes('rate limit');
+  }
+
+  if (isRateLimitExceeded || status === 429) {
+    return new ServiceError('Rate limit exceeded', EServiceKindError.RATE_LIMIT);
+  }
+
+  if (status >= 500 || status === 401 || status === 403) {
+    return new ServiceError(
+      responseData.message ?? `GitHub API error (HTTP ${status})`,
+      EServiceKindError.UPSTREAM,
     );
   }
 
-  if (isRateLimitExceeded) {
-    throw new ServiceError(
-      "Rate limit exceeded",
-      EServiceKindError.RATE_LIMIT,
-    );
-  }
-
-  throw new ServiceError(
-    "unknown error",
-    EServiceKindError.NOT_FOUND,
-  );
+  return new ServiceError('unknown error', EServiceKindError.NOT_FOUND);
 }

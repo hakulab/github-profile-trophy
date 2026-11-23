@@ -3,10 +3,10 @@ export class CustomURLSearchParams extends URLSearchParams {
     if (super.has(key)) {
       const param = super.get(key);
       if (param !== null) {
-        return param.toString();
+        return param;
       }
     }
-    return defaultValue.toString();
+    return defaultValue;
   }
   getNumberValue(key: string, defaultValue: number): number {
     if (super.has(key)) {
@@ -24,14 +24,14 @@ export class CustomURLSearchParams extends URLSearchParams {
   getBooleanValue(key: string, defaultValue: boolean): boolean {
     if (super.has(key)) {
       const param = super.get(key);
-      return param !== null && param.toString() === "true";
+      return param !== null && param === 'true';
     }
     return defaultValue;
   }
 }
 
 export function parseParams(req: Request): CustomURLSearchParams {
-  const splittedURL = req.url.split("?");
+  const splittedURL = req.url.split('?');
   if (splittedURL.length < 2) {
     return new CustomURLSearchParams();
   }
@@ -40,12 +40,12 @@ export function parseParams(req: Request): CustomURLSearchParams {
 
 export function abridgeScore(score: number): string {
   if (Math.abs(score) < 1) {
-    return "0pt";
+    return '0pt';
   }
   if (Math.abs(score) > 999) {
-    return (Math.sign(score) * (Math.abs(score) / 1000)).toFixed(1) + "kpt";
+    return (Math.sign(score) * (Math.abs(score) / 1000)).toFixed(1) + 'kpt';
   }
-  return (Math.sign(score) * Math.abs(score)).toString() + "pt";
+  return (Math.sign(score) * Math.abs(score)).toString() + 'pt';
 }
 
 const HOUR_IN_MILLISECONDS = 60 * 60 * 1000;
@@ -61,23 +61,23 @@ export const CONSTANTS = {
   DEFAULT_MARGIN_H: 0,
   DEFAULT_NO_BACKGROUND: false,
   DEFAULT_NO_FRAME: false,
-  DEFAULT_GITHUB_API: "https://api.github.com/graphql",
+  DEFAULT_GITHUB_API: 'https://api.github.com/graphql',
   DEFAULT_GITHUB_RETRY_DELAY: 500,
   REVALIDATE_TIME: HOUR_IN_MILLISECONDS * 6,
   REDIS_TTL: HOUR_IN_MILLISECONDS * 4,
 };
 
 export enum RANK {
-  SECRET = "SECRET",
-  SSS = "SSS",
-  SS = "SS",
-  S = "S",
-  AAA = "AAA",
-  AA = "AA",
-  A = "A",
-  B = "B",
-  C = "C",
-  UNKNOWN = "?",
+  SECRET = 'SECRET',
+  SSS = 'SSS',
+  SS = 'SS',
+  S = 'S',
+  AAA = 'AAA',
+  AA = 'AA',
+  A = 'A',
+  B = 'B',
+  C = 'C',
+  UNKNOWN = '?',
 }
 
 export const RANK_ORDER = Object.values(RANK);
