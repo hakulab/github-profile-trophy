@@ -22,7 +22,12 @@ import {
   type RepositoryOwnerSummaryNode,
 } from '../user_info';
 import { CONSTANTS, normalizeRepoOwners } from '../utils';
-import { requestGithubData, requestGithubGraphQL, type FetchLike } from './request';
+import {
+  requestGithubData,
+  requestGithubGraphQL,
+  type FetchLike,
+  type RequestGithubOptions,
+} from './request';
 
 export interface GithubApiServiceOptions {
   tokens?: (string | undefined)[];
@@ -92,8 +97,9 @@ export class GithubApiService extends GithubRepository {
   ): Promise<{ totalCount: number; nodes: RepositoryOwnerSummaryNode[] } | ServiceError> {
     const nodes: RepositoryOwnerSummaryNode[] = [];
     let after: string | null = null;
+    let totalCount = 0;
 
-    for (;;) {
+    for (let pageIndex = 0; pageIndex < CONSTANTS.MAX_OWNER_REPO_PAGES; pageIndex += 1) {
       const page: { repositoryOwner?: GitHubRepositoryOwner | null } | ServiceError =
         await this.executeGraphQLQuery<{
           repositoryOwner?: GitHubRepositoryOwner | null;
@@ -110,16 +116,18 @@ export class GithubApiService extends GithubRepository {
         );
       }
 
-      const pageNodes = owner.repositories.nodes;
-      nodes.push(...pageNodes);
+      totalCount = owner.repositories.totalCount;
+      nodes.push(...owner.repositories.nodes);
 
       const hasNextPage: boolean = owner.repositories.pageInfo.hasNextPage;
       const nextCursor: string | null = owner.repositories.pageInfo.endCursor;
-      if (!hasNextPage || !nextCursor) {
-        return { totalCount: owner.repositories.totalCount, nodes };
+      if (!hasNextPage || !nextCursor || nextCursor === after) {
+        return { totalCount, nodes };
       }
       after = nextCursor;
     }
+
+    return { totalCount, nodes };
   }
 
   async requestUserInfo(
@@ -192,9 +200,9 @@ export class GithubApiService extends GithubRepository {
         totalStargazers,
         languageCount: languages.size,
       });
-    } catch {
+    } catch (error) {
       Logger.error(`Error fetching user info for username: ${username}`);
-      return new ServiceError('Not found', EServiceKindError.NOT_FOUND);
+      return this.toServiceError(error);
     }
   }
 
@@ -202,28 +210,29 @@ export class GithubApiService extends GithubRepository {
     query: string,
     variables: Record<string, string | null | undefined>,
   ): Promise<T | ServiceError> {
-    try {
-      const retry = new Retry(this.tokens.length, this.retryDelay);
-      return await retry.fetch<T>(async ({ attempt }) => {
-        return await requestGithubGraphQL<T>(query, variables, {
-          apiUrl: this.apiUrl,
-          token: this.tokens[attempt],
-          fetchImpl: this.fetchImpl,
-        });
-      });
-    } catch (error) {
-      return this.toServiceError(error);
-    }
+    return await this.executeWithRetry(requestGithubGraphQL<T>, query, variables);
   }
 
   async executeQuery<T = unknown>(
     query: string,
     variables: Record<string, string | null | undefined>,
   ): Promise<T | ServiceError> {
+    return await this.executeWithRetry(requestGithubData<T>, query, variables);
+  }
+
+  private async executeWithRetry<T>(
+    requester: (
+      query: string,
+      variables: Record<string, string | null | undefined>,
+      options: RequestGithubOptions,
+    ) => Promise<T>,
+    query: string,
+    variables: Record<string, string | null | undefined>,
+  ): Promise<T | ServiceError> {
     try {
       const retry = new Retry(this.tokens.length, this.retryDelay);
       return await retry.fetch<T>(async ({ attempt }) => {
-        return await requestGithubData<T>(query, variables, {
+        return await requester(query, variables, {
           apiUrl: this.apiUrl,
           token: this.tokens[attempt],
           fetchImpl: this.fetchImpl,
@@ -235,6 +244,10 @@ export class GithubApiService extends GithubRepository {
   }
 
   private toServiceError(error: unknown): ServiceError {
+    if (error instanceof ServiceError) {
+      Logger.error(error.message);
+      return error;
+    }
     if (error instanceof Error && error.cause instanceof ServiceError) {
       Logger.error(error.cause.message);
       return error.cause;
@@ -244,6 +257,6 @@ export class GithubApiService extends GithubRepository {
     } else {
       Logger.error(error);
     }
-    return new ServiceError('not found', EServiceKindError.NOT_FOUND);
+    return new ServiceError('GitHub API request failed', EServiceKindError.UPSTREAM);
   }
 }

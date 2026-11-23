@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { app, buildCacheKey, parseWhitelist, resolveRepoOwners } from '../app';
+import { Card } from '../card';
+import { Logger, setLoggingEnabled } from '../Helpers/Logger';
 import { GithubRepository } from '../Repository/GithubRepository';
+import { COLORS } from '../theme';
 import { EServiceKindError, ServiceError } from '../Types/index';
 import {
   UserInfo,
@@ -11,6 +14,7 @@ import {
   type GitHubUserPullRequest,
   type GitHubUserRepository,
 } from '../user_info';
+import { parseParams } from '../utils';
 
 function createMockUserInfo(): UserInfo {
   return UserInfo.fromCombined({
@@ -93,13 +97,101 @@ class StubGithubRepository extends GithubRepository {
 }
 
 describe('app', () => {
-  it('returns 400 HTML when username is missing', async () => {
+  it('returns 400 HTML with no-store when username is missing', async () => {
     const res = await app(new Request('https://trophy.example.com/'), { ENV_TYPE: 'test' });
 
     expect(res.status).toBe(400);
     expect(res.headers.get('Content-Type')).toBe('text/html');
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
     const html = await res.text();
     expect(html).toContain('"username" is a required query parameter');
+  });
+
+  it('escapes HTML special characters in the 400 base URL', async () => {
+    const res = await app(new Request('https://trophy.example.com/%22%3E%3Cscript%3E'), {
+      ENV_TYPE: 'test',
+    });
+
+    expect(res.status).toBe(400);
+    const html = await res.text();
+    expect(html).not.toContain('"><script>');
+  });
+
+  it('returns empty body for HEAD requests on both cache miss and cache hit', async () => {
+    const client = new StubGithubRepository(createMockUserInfo());
+    const { cache, store } = createMockCache();
+
+    const miss = await app(
+      new Request('https://trophy.example.com/?username=octocat', { method: 'HEAD' }),
+      { ENV_TYPE: 'test' },
+      { client, cache },
+    );
+
+    expect(miss.status).toBe(200);
+    expect(miss.headers.get('Content-Type')).toBe('image/svg+xml');
+    expect(await miss.text()).toBe('');
+    expect(store.size).toBe(1);
+    expect(client.requestUserInfoSpy).toHaveBeenCalledTimes(1);
+
+    const hit = await app(
+      new Request('https://trophy.example.com/?username=Octocat', { method: 'HEAD' }),
+      { ENV_TYPE: 'test' },
+      { client, cache },
+    );
+
+    expect(hit.status).toBe(200);
+    expect(hit.headers.get('Content-Type')).toBe('image/svg+xml');
+    expect(await hit.text()).toBe('');
+    expect(client.requestUserInfoSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('parses query parameters containing literal question marks via URL.searchParams', () => {
+    const params = parseParams(
+      new Request('https://trophy.example.com/?username=octocat&title=a?b&theme=dracula'),
+    );
+
+    expect(params.get('username')).toBe('octocat');
+    expect(params.get('title')).toBe('a?b');
+    expect(params.get('theme')).toBe('dracula');
+  });
+
+  it('normalizes username casing in buildCacheKey', () => {
+    const lower = buildCacheKey(new Request('https://trophy.example.com/?username=alice'));
+    const upper = buildCacheKey(new Request('https://trophy.example.com/?username=Alice'));
+    expect(lower.url).toBe(upper.url);
+    expect(new URL(upper.url).searchParams.get('username')).toBe('alice');
+  });
+
+  it('clamps zero or negative column and row values in Card without NaN SVG coordinates', () => {
+    const svg = new Card([], [], 0, 0, 110, 0, 0, false, false).render(
+      createMockUserInfo(),
+      COLORS.default,
+    );
+
+    expect(svg).toContain('<svg');
+    expect(svg).not.toContain('NaN');
+  });
+
+  it('resets Logger enabled state on non-test requests after a test request', async () => {
+    const client = new StubGithubRepository(createMockUserInfo());
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      await app(
+        new Request('https://trophy.example.com/?username=octocat'),
+        { ENV_TYPE: 'test' },
+        { client },
+      );
+      Logger.error('suppressed');
+      expect(errorSpy).not.toHaveBeenCalled();
+
+      await app(new Request('https://trophy.example.com/?username=octocat'), {}, { client });
+      Logger.error('visible');
+      expect(errorSpy).toHaveBeenCalledWith('visible');
+    } finally {
+      setLoggingEnabled(false);
+      errorSpy.mockRestore();
+    }
   });
 
   it('returns 405 for non-GET/HEAD requests', async () => {
@@ -245,14 +337,35 @@ describe('app', () => {
     expect(client.requestUserInfoSpy).toHaveBeenLastCalledWith('alice', []);
   });
 
-  it('caps additional repo-owners at MAX_ADDITIONAL_REPO_OWNERS', () => {
-    const owners = Array.from({ length: 15 }, (_, i) => `org${String(i).padStart(2, '0')}`).join(
-      ',',
-    );
+  it('caps additional repo-owners in caller order before sorting', () => {
+    const owners = [
+      'zeta',
+      'yankee',
+      'xray',
+      'whiskey',
+      'victor',
+      'uniform',
+      'tango',
+      'sierra',
+      'romeo',
+      'quebec',
+      'alpha',
+      'bravo',
+    ].join(',');
     const resolved = resolveRepoOwners(new URLSearchParams({ 'repo-owners': owners }), {}, 'alice');
     expect(resolved).toHaveLength(10);
-    expect(resolved[0]).toBe('org00');
-    expect(resolved[9]).toBe('org09');
+    expect(resolved).toEqual([
+      'quebec',
+      'romeo',
+      'sierra',
+      'tango',
+      'uniform',
+      'victor',
+      'whiskey',
+      'xray',
+      'yankee',
+      'zeta',
+    ]);
   });
 
   it('enforces WHITELIST case-insensitively and rejects unlisted usernames with 403 no-store', async () => {

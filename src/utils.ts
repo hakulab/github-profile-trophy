@@ -31,11 +31,16 @@ export class CustomURLSearchParams extends URLSearchParams {
 }
 
 export function parseParams(req: Request): CustomURLSearchParams {
-  const splittedURL = req.url.split('?');
-  if (splittedURL.length < 2) {
-    return new CustomURLSearchParams();
-  }
-  return new CustomURLSearchParams(splittedURL[1]);
+  return new CustomURLSearchParams(new URL(req.url).searchParams);
+}
+
+export function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 export function abridgeScore(score: number): string {
@@ -47,8 +52,6 @@ export function abridgeScore(score: number): string {
   }
   return (Math.sign(score) * Math.abs(score)).toString() + 'pt';
 }
-
-const HOUR_IN_MILLISECONDS = 60 * 60 * 1000;
 
 export const CONSTANTS = {
   CACHE_MAX_AGE: 18800,
@@ -64,14 +67,14 @@ export const CONSTANTS = {
   DEFAULT_GITHUB_API: 'https://api.github.com/graphql',
   DEFAULT_GITHUB_RETRY_DELAY: 500,
   MAX_ADDITIONAL_REPO_OWNERS: 10,
-  REVALIDATE_TIME: HOUR_IN_MILLISECONDS * 6,
-  REDIS_TTL: HOUR_IN_MILLISECONDS * 4,
+  MAX_OWNER_REPO_PAGES: 10,
 };
 
 /**
- * Parse, normalize, deduplicate, and sort additional repository owner logins.
+ * Parse, normalize, deduplicate, cap, and sort additional repository owner logins.
  * Excludes the primary username (case-insensitively) so its repositories are
- * never fetched twice, and caps the result at `maxOwners`.
+ * never fetched twice, preserves caller order when capping at `maxOwners`, and
+ * sorts the kept logins for canonical cache keys.
  */
 export function normalizeRepoOwners(
   rawValues: string[],
@@ -91,7 +94,7 @@ export function normalizeRepoOwners(
     }
   }
 
-  return [...owners].toSorted((a, b) => a.localeCompare(b)).slice(0, maxOwners);
+  return [...owners].slice(0, maxOwners).toSorted((a, b) => a.localeCompare(b));
 }
 
 export enum RANK {

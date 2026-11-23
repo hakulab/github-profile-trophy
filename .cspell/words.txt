@@ -25,6 +25,7 @@ pkgs
 potrace
 Segoe
 Selinger
+substituters
 taplo
 tokyonight
 vitest

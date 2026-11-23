@@ -19,7 +19,3 @@ export abstract class GithubRepository {
   abstract requestUserPullRequest(username: string): Promise<GitHubUserPullRequest | ServiceError>;
   abstract requestUserRepository(username: string): Promise<GitHubUserRepository | ServiceError>;
 }
-
-export class GithubRepositoryService {
-  constructor(public repository: GithubRepository) {}
-}

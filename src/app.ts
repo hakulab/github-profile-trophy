@@ -3,11 +3,11 @@ import { type Env } from './env';
 import { Error400, Error403 } from './error_page';
 import { setLoggingEnabled } from './Helpers/Logger';
 import { ErrorPage } from './pages/Error';
-import { GithubRepositoryService, type GithubRepository } from './Repository/GithubRepository';
+import { type GithubRepository } from './Repository/GithubRepository';
 import { GithubApiService } from './Services/GithubApiService';
 import { COLORS, type Theme } from './theme';
 import { ServiceError } from './Types/index';
-import { CONSTANTS, normalizeRepoOwners, parseParams } from './utils';
+import { CONSTANTS, escapeHtml, normalizeRepoOwners, parseParams } from './utils';
 
 export interface AppDependencies {
   client?: GithubRepository;
@@ -64,6 +64,10 @@ export function buildCacheKey(
     if (key === 'repo-owners' || key === 'repo_owners') {
       continue;
     }
+    if (key === 'username') {
+      entries.push([key, value.trim().toLowerCase()]);
+      continue;
+    }
     entries.push([key, value]);
   }
 
@@ -89,9 +93,7 @@ export async function app(
   env: Env = {},
   deps: AppDependencies = {},
 ): Promise<Response> {
-  if (env.ENV_TYPE === 'test') {
-    setLoggingEnabled(false);
-  }
+  setLoggingEnabled(env.ENV_TYPE !== 'test');
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return new Response('Method Not Allowed', {
@@ -102,6 +104,7 @@ export async function app(
     });
   }
 
+  const isHead = req.method === 'HEAD';
   const url = new URL(req.url);
   if (url.pathname === '/favicon.ico') {
     return new Response(null, { status: 404 });
@@ -114,7 +117,7 @@ export async function app(
   const themeParam = params.getStringValue('theme', 'default');
 
   if (username === null) {
-    const [base] = req.url.split('?');
+    const base = escapeHtml(`${url.origin}${url.pathname}`);
     const error = new Error400(
       `<section>
       <div>
@@ -158,11 +161,11 @@ export async function app(
       </script>
     </section>`,
     );
-    return new Response(error.render(), {
+    return new Response(isHead ? null : error.render(), {
       status: error.status,
       headers: new Headers({
         'Content-Type': 'text/html',
-        'Cache-Control': cacheControlHeader,
+        'Cache-Control': errorCacheControlHeader,
       }),
     });
   }
@@ -170,7 +173,7 @@ export async function app(
   const whitelist = parseWhitelist(env);
   if (whitelist && !whitelist.has(username.trim().toLowerCase())) {
     const error = new Error403('This username is not whitelisted on this instance.');
-    return new Response(error.render(), {
+    return new Response(isHead ? null : error.render(), {
       status: error.status,
       headers: new Headers({
         'Content-Type': 'text/html',
@@ -184,7 +187,12 @@ export async function app(
   if (cache && cacheKey) {
     const cached = await cache.match(cacheKey);
     if (cached) {
-      return cached;
+      return isHead
+        ? new Response(null, {
+            status: cached.status,
+            headers: cached.headers,
+          })
+        : cached;
     }
   }
 
@@ -208,11 +216,11 @@ export async function app(
 
   const repoOwners = resolveRepoOwners(params, env, username);
 
-  const client = deps.client ?? new GithubRepositoryService(new GithubApiService(env)).repository;
+  const client = deps.client ?? new GithubApiService(env);
   const userInfo = await client.requestUserInfo(username, repoOwners);
 
   if (userInfo instanceof ServiceError) {
-    return new Response(ErrorPage({ error: userInfo }).render(), {
+    return new Response(isHead ? null : ErrorPage({ error: userInfo }).render(), {
       status: userInfo.code,
       headers: new Headers({
         'Content-Type': 'text/html',
@@ -248,6 +256,13 @@ export async function app(
     } else {
       await putPromise;
     }
+  }
+
+  if (isHead) {
+    return new Response(null, {
+      status: response.status,
+      headers: response.headers,
+    });
   }
 
   return response;

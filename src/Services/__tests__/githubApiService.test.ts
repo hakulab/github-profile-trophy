@@ -477,6 +477,87 @@ describe('GithubApiService', () => {
     expect((error as ServiceError).cause).toBe(EServiceKindError.RATE_LIMIT);
   });
 
+  it('stops paginating when the cursor does not advance', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      jsonResponse({
+        data: {
+          repositoryOwner: {
+            repositories: {
+              totalCount: 2,
+              pageInfo: { hasNextPage: true, endCursor: 'stuck-cursor' },
+              nodes: [
+                {
+                  nameWithOwner: 'acme-org/repo-one',
+                  primaryLanguage: { name: 'TypeScript' },
+                  stargazerCount: 5,
+                },
+              ],
+            },
+          },
+        },
+      }),
+    );
+
+    const provider = new GithubApiService(
+      { GITHUB_TOKEN1: 'token-1' },
+      { retryDelay: 0, fetchImpl: fetchMock },
+    );
+
+    const result = await provider.requestOwnerRepositories('acme-org');
+
+    expect(result).not.toBeInstanceOf(ServiceError);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('caps owner repository pagination at MAX_OWNER_REPO_PAGES', async () => {
+    let callCount = 0;
+    const fetchMock = vi.fn<typeof fetch>(async () => {
+      callCount += 1;
+      return jsonResponse({
+        data: {
+          repositoryOwner: {
+            repositories: {
+              totalCount: 2000,
+              pageInfo: { hasNextPage: true, endCursor: `cursor-${callCount}` },
+              nodes: [
+                {
+                  nameWithOwner: `acme-org/repo-${callCount}`,
+                  primaryLanguage: { name: 'TypeScript' },
+                  stargazerCount: 1,
+                },
+              ],
+            },
+          },
+        },
+      });
+    });
+
+    const provider = new GithubApiService(
+      { GITHUB_TOKEN1: 'token-1' },
+      { retryDelay: 0, fetchImpl: fetchMock },
+    );
+
+    const result = await provider.requestOwnerRepositories('acme-org');
+
+    expect(result).not.toBeInstanceOf(ServiceError);
+    expect(fetchMock).toHaveBeenCalledTimes(10);
+  });
+
+  it('maps unexpected fetch failures to 502 UPSTREAM instead of 404 NOT_FOUND', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('network down'));
+
+    const provider = new GithubApiService(
+      { GITHUB_TOKEN1: 'token-1' },
+      { retryDelay: 0, fetchImpl: fetchMock },
+    );
+
+    const error = await provider.requestUserInfo('alice');
+
+    expect(error).toBeInstanceOf(ServiceError);
+    expect((error as ServiceError).code).toBe(502);
+    expect((error as ServiceError).cause).toBe(EServiceKindError.UPSTREAM);
+  });
+
   it('accepts PAT_1 and PAT_2 aliases alongside GITHUB_TOKEN1 and GITHUB_TOKEN2', () => {
     expect(resolveTokens({ PAT_1: 'pat-1', PAT_2: 'pat-2' })).toEqual(['pat-1', 'pat-2']);
     expect(
