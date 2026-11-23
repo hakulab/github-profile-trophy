@@ -11,6 +11,7 @@ interface Repository {
 
 export interface RepositoryOwnerSummaryNode {
   nameWithOwner: string;
+  primaryLanguage?: Language | null;
   stargazerCount: number;
 }
 
@@ -28,6 +29,7 @@ export interface GitHubRepositoryOwner {
 export interface RepositoryTotalsOverride {
   totalRepositories: number;
   totalStargazers: number;
+  languageCount?: number;
 }
 
 export interface GitHubUserRepository {
@@ -139,7 +141,7 @@ export class UserInfo {
     this.totalStargazers = totalStargazers;
     this.totalRepositories =
       repositoryTotals?.totalRepositories ?? userRepository.repositories.totalCount;
-    this.languageCount = languages.size;
+    this.languageCount = repositoryTotals?.languageCount ?? languages.size;
     this.durationYear = durationYear;
     this.durationDays = durationDays;
     this.ancientAccount = ancientAccount;

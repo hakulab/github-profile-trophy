@@ -1,4 +1,9 @@
 GITHUB_TOKEN1=
 GITHUB_TOKEN2=
+# Optional PAT_1 / PAT_2 aliases are also accepted alongside GITHUB_TOKEN1 / GITHUB_TOKEN2
+# PAT_1=
+# PAT_2=
 GITHUB_API=https://api.github.com/graphql
 DEFAULT_REPO_OWNERS=
+# Optional comma-separated list of allowed GitHub usernames (case-insensitive)
+WHITELIST=

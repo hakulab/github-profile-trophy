@@ -1,6 +1,6 @@
 import { Card } from './card';
 import { type Env } from './env';
-import { Error400 } from './error_page';
+import { Error400, Error403 } from './error_page';
 import { setLoggingEnabled } from './Helpers/Logger';
 import { ErrorPage } from './pages/Error';
 import { GithubRepositoryService, type GithubRepository } from './Repository/GithubRepository';
@@ -23,6 +23,18 @@ const cacheControlHeader = [
 ].join(', ');
 
 const errorCacheControlHeader = 'no-store';
+
+export function parseWhitelist(env: Pick<Env, 'WHITELIST'> = {}): Set<string> | null {
+  if (!env.WHITELIST) {
+    return null;
+  }
+
+  const allowed = env.WHITELIST.split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry.length > 0);
+
+  return allowed.length > 0 ? new Set(allowed) : null;
+}
 
 export function resolveRepoOwners(
   searchParams: URLSearchParams,
@@ -95,15 +107,6 @@ export async function app(
     return new Response(null, { status: 404 });
   }
 
-  const cache = deps.cache;
-  const cacheKey = cache ? buildCacheKey(req, env) : null;
-  if (cache && cacheKey) {
-    const cached = await cache.match(cacheKey);
-    if (cached) {
-      return cached;
-    }
-  }
-
   const params = parseParams(req);
   const username = params.get('username');
   const row = params.getNumberValue('row', CONSTANTS.DEFAULT_MAX_ROW);
@@ -131,10 +134,10 @@ export async function app(
           <label for="username">GitHub Username</label>
           <input type="text" name="username" id="username" placeholder="Ex. gabriel-logan" required>
           <label for="theme">Theme (Optional)</label>
-          <input type="text" name="theme" id="theme" placeholder="Ex. onedark" value="light">
+          <input type="text" name="theme" id="theme" placeholder="Ex. onedark" value="default">
           <text>
             See all the available themes
-            <a href="https://github.com/ryo-ma/github-profile-trophy?tab=readme-ov-file#apply-theme" target="_blank">here</a>
+            <a href="https://github.com/hakulab/github-profile-trophy#themes" target="_blank">here</a>
           </text>
           <br>
           <button type="submit">Get Trophies</button>
@@ -162,6 +165,27 @@ export async function app(
         'Cache-Control': cacheControlHeader,
       }),
     });
+  }
+
+  const whitelist = parseWhitelist(env);
+  if (whitelist && !whitelist.has(username.trim().toLowerCase())) {
+    const error = new Error403('This username is not whitelisted on this instance.');
+    return new Response(error.render(), {
+      status: error.status,
+      headers: new Headers({
+        'Content-Type': 'text/html',
+        'Cache-Control': errorCacheControlHeader,
+      }),
+    });
+  }
+
+  const cache = deps.cache;
+  const cacheKey = cache ? buildCacheKey(req, env) : null;
+  if (cache && cacheKey) {
+    const cached = await cache.match(cacheKey);
+    if (cached) {
+      return cached;
+    }
   }
 
   let theme: Theme = COLORS.default;

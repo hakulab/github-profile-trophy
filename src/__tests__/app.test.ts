@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { app, buildCacheKey, resolveRepoOwners } from '../app';
+import { app, buildCacheKey, parseWhitelist, resolveRepoOwners } from '../app';
 import { GithubRepository } from '../Repository/GithubRepository';
 import { EServiceKindError, ServiceError } from '../Types/index';
 import {
@@ -253,5 +253,45 @@ describe('app', () => {
     expect(resolved).toHaveLength(10);
     expect(resolved[0]).toBe('org00');
     expect(resolved[9]).toBe('org09');
+  });
+
+  it('enforces WHITELIST case-insensitively and rejects unlisted usernames with 403 no-store', async () => {
+    const client = new StubGithubRepository(createMockUserInfo());
+    const { cache, store } = createMockCache();
+
+    const allowed = await app(
+      new Request('https://trophy.example.com/?username=Alice'),
+      { ENV_TYPE: 'test', WHITELIST: ' alice , bob ' },
+      { client, cache },
+    );
+    expect(allowed.status).toBe(200);
+    expect(client.requestUserInfoSpy).toHaveBeenCalledTimes(1);
+
+    const rejected = await app(
+      new Request('https://trophy.example.com/?username=charlie'),
+      { ENV_TYPE: 'test', WHITELIST: 'alice,bob' },
+      { client, cache },
+    );
+    expect(rejected.status).toBe(403);
+    expect(rejected.headers.get('Content-Type')).toBe('text/html');
+    expect(rejected.headers.get('Cache-Control')).toBe('no-store');
+    expect(await rejected.text()).toContain('403 - Forbidden');
+    expect(client.requestUserInfoSpy).toHaveBeenCalledTimes(1);
+    expect(store.size).toBe(1);
+  });
+
+  it('allows any username when WHITELIST is unset or blank', async () => {
+    const client = new StubGithubRepository(createMockUserInfo());
+
+    expect(parseWhitelist({})).toBeNull();
+    expect(parseWhitelist({ WHITELIST: ' , ' })).toBeNull();
+
+    const res = await app(
+      new Request('https://trophy.example.com/?username=bob'),
+      { ENV_TYPE: 'test', WHITELIST: '   ' },
+      { client },
+    );
+    expect(res.status).toBe(200);
+    expect(client.requestUserInfoSpy).toHaveBeenCalledTimes(1);
   });
 });

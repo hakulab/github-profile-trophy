@@ -6,13 +6,14 @@ routes = [{ pattern = "github-profile-trophy.hakula.xyz", custom_domain = true }
 
 [vars]
 GITHUB_API = "https://api.github.com/graphql"
+WHITELIST = "hakula139"
 # Optional comma-separated default additional repository owners when the
-# `repo-owners` query parameter is omitted (e.g., "org-a,org-b").
+# `repo-owners` query parameter is omitted.
 # DEFAULT_REPO_OWNERS = ""
 
 # Set via `wrangler secret put`:
-# GITHUB_TOKEN1 - Primary GitHub personal access token for GraphQL API
-# GITHUB_TOKEN2 - Optional secondary GitHub personal access token for rotation
+# GITHUB_TOKEN1 (or PAT_1) - Primary GitHub personal access token for GraphQL API
+# GITHUB_TOKEN2 (or PAT_2) - Optional secondary GitHub personal access token for rotation
 
 [observability.logs]
 enabled = true
