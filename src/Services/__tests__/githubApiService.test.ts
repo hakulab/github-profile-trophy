@@ -482,10 +482,19 @@ describe('GithubApiService', () => {
     expect(
       resolveTokens({
         GITHUB_TOKEN1: 'token-1',
+        PAT_1: 'pat-1',
+        GITHUB_TOKEN2: 'token-2',
+        PAT_2: 'pat-2',
+      }),
+    ).toEqual(['token-1', 'pat-1', 'token-2', 'pat-2']);
+    expect(
+      resolveTokens({
+        GITHUB_TOKEN1: 'token-1',
         PAT_1: 'token-1',
         PAT_2: 'pat-2',
       }),
     ).toEqual(['token-1', 'pat-2']);
+    expect(resolveTokens({ GITHUB_TOKEN1: '', PAT_1: '' })).toEqual(['']);
     expect(resolveTokens({})).toEqual(['']);
   });
 });

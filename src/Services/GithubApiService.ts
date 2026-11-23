@@ -31,14 +31,18 @@ export interface GithubApiServiceOptions {
   fetchImpl?: FetchLike;
 }
 
-export function resolveTokens(
-  env: Pick<Env, 'GITHUB_TOKEN1' | 'GITHUB_TOKEN2' | 'PAT_1' | 'PAT_2'>,
-): string[] {
-  const configured = [env.GITHUB_TOKEN1, env.PAT_1, env.GITHUB_TOKEN2, env.PAT_2].filter(
+function normalizeTokens(tokens: (string | undefined)[]): string[] {
+  const configured = tokens.filter(
     (token): token is string => typeof token === 'string' && token.length > 0,
   );
   const unique = [...new Set(configured)];
   return unique.length > 0 ? unique : [''];
+}
+
+export function resolveTokens(
+  env: Pick<Env, 'GITHUB_TOKEN1' | 'GITHUB_TOKEN2' | 'PAT_1' | 'PAT_2'>,
+): string[] {
+  return normalizeTokens([env.GITHUB_TOKEN1, env.PAT_1, env.GITHUB_TOKEN2, env.PAT_2]);
 }
 
 export class GithubApiService extends GithubRepository {
@@ -49,14 +53,7 @@ export class GithubApiService extends GithubRepository {
 
   constructor(env: Env = {}, options: GithubApiServiceOptions = {}) {
     super();
-    if (options.tokens) {
-      const filtered = options.tokens.filter(
-        (token): token is string => typeof token === 'string' && token.length > 0,
-      );
-      this.tokens = filtered.length > 0 ? filtered : [''];
-    } else {
-      this.tokens = resolveTokens(env);
-    }
+    this.tokens = options.tokens ? normalizeTokens(options.tokens) : resolveTokens(env);
     this.apiUrl = options.apiUrl ?? env.GITHUB_API ?? CONSTANTS.DEFAULT_GITHUB_API;
     this.retryDelay = options.retryDelay ?? CONSTANTS.DEFAULT_GITHUB_RETRY_DELAY;
     this.fetchImpl = options.fetchImpl;

@@ -36,31 +36,6 @@ GitHub username and pointing the URL at your deployed Worker:
 | [`theme`](#themes)            | `default` | Color theme name                                                   |
 | [`title`](#filter-by-title)   | all       | Comma-separated trophy titles to include or exclude (`-` prefix)   |
 
-### Filter by title
-
-Include specific trophies with `title`, or exclude them with a `-` prefix:
-
-```text
-https://your-worker.example.com/?username=alice&title=Followers
-https://your-worker.example.com/?username=alice&title=Stars,Followers
-https://your-worker.example.com/?username=alice&title=-Stars,-Followers
-```
-
-![Filter by Stars and Followers titles](https://user-images.githubusercontent.com/6661165/92317141-80ebe700-f038-11ea-8501-4015bfbb2cf4.png)
-
-### Filter by rank
-
-Available ranks are `SECRET`, `SSS`, `SS`, `S`, `AAA`, `AA`, `A`, `B`, `C`, and
-`?` (`UNKNOWN`). Include or exclude (`-` prefix) ranks with `rank`:
-
-```text
-https://your-worker.example.com/?username=alice&rank=S
-https://your-worker.example.com/?username=alice&rank=S,AAA
-https://your-worker.example.com/?username=alice&rank=-C,-B,-?
-```
-
-![Filter by S and AAA ranks](https://user-images.githubusercontent.com/6661165/91642657-1cdd8780-ea68-11ea-994b-4568a55cd22a.png)
-
 ### Layout
 
 Limit the grid with `column` (default `8`) and `row` (default `3`). Trophies
@@ -98,6 +73,19 @@ https://your-worker.example.com/?username=alice&no-bg=true&no-frame=true
 
 ![Hide frames example](https://github.com/user-attachments/assets/54de15a3-d907-4a50-8117-170aae74d1cd)
 
+### Filter by rank
+
+Available ranks are `SECRET`, `SSS`, `SS`, `S`, `AAA`, `AA`, `A`, `B`, `C`, and
+`?` (`UNKNOWN`). Include or exclude (`-` prefix) ranks with `rank`:
+
+```text
+https://your-worker.example.com/?username=alice&rank=S
+https://your-worker.example.com/?username=alice&rank=S,AAA
+https://your-worker.example.com/?username=alice&rank=-C,-B,-?
+```
+
+![Filter by S and AAA ranks](https://user-images.githubusercontent.com/6661165/91642657-1cdd8780-ea68-11ea-994b-4568a55cd22a.png)
+
 ### Multi-owner
 
 Combine repository counts, stargazers, and `MultiLanguage` counts across the
@@ -117,6 +105,18 @@ If the instance sets `DEFAULT_REPO_OWNERS`, pass an empty `?repo-owners=` (or
 ```text
 https://your-worker.example.com/?username=alice&repo-owners=
 ```
+
+### Filter by title
+
+Include specific trophies with `title`, or exclude them with a `-` prefix:
+
+```text
+https://your-worker.example.com/?username=alice&title=Followers
+https://your-worker.example.com/?username=alice&title=Stars,Followers
+https://your-worker.example.com/?username=alice&title=-Stars,-Followers
+```
+
+![Filter by Stars and Followers titles](https://user-images.githubusercontent.com/6661165/92317141-80ebe700-f038-11ea-8501-4015bfbb2cf4.png)
 
 ### Themes
 
@@ -244,7 +244,7 @@ Ranks are `SSS`, `SS`, `S`, `AAA`, `AA`, `A`, `B`, `C`, `UNKNOWN` (`?`), and
 | Rank       | Description                                                |
 | ---------- | ---------------------------------------------------------- |
 | SSS, SS, S | Hard-to-reach top ranks                                    |
-| AAA, AA, A | Strong progress; a solid initial target                    |
+| AAA, AA, A | Strong progress and a solid initial target                 |
 | B, C       | Good progress underway                                     |
 | UNKNOWN    | No qualifying activity yet (denoted by `?`)                |
 | SECRET     | Rare trophies hidden until their unlock conditions are met |
@@ -299,16 +299,16 @@ default repository owners, and access restrictions.
 Configure secrets with `wrangler secret put` and non-secret variables under
 `[vars]` in `wrangler.toml` (or in `.dev.vars` for local development):
 
-| Variable              | Required | Description                                                                                                                                |
-| --------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `GITHUB_TOKEN1`       | Yes\*    | Primary GitHub personal access token (`PAT_1` is also accepted as an alias)                                                                |
-| `GITHUB_TOKEN2`       | No       | Secondary GitHub personal access token for rotation (`PAT_2` is also accepted as an alias)                                                 |
-| `GITHUB_API`          | No       | GitHub GraphQL endpoint (defaults to `https://api.github.com/graphql`)                                                                     |
-| `DEFAULT_REPO_OWNERS` | No       | Comma-separated default additional repository owners when `?repo-owners=` is omitted (e.g., `org-a,org-b`)                                 |
-| `WHITELIST`           | No       | Comma-separated allowed GitHub usernames, case-insensitive (e.g., `alice,bob`); other requests return `403` with `Cache-Control: no-store` |
+| Variable              | Required | Description                                                                                       |
+| --------------------- | -------- | ------------------------------------------------------------------------------------------------- |
+| `GITHUB_TOKEN1`       | No\*     | Primary GitHub personal access token (`PAT_1` is also accepted as an alias)                       |
+| `GITHUB_TOKEN2`       | No\*     | Secondary GitHub personal access token for rotation (`PAT_2` is also accepted as an alias)        |
+| `GITHUB_API`          | No       | GitHub GraphQL endpoint (defaults to `https://api.github.com/graphql`)                            |
+| `DEFAULT_REPO_OWNERS` | No       | Comma-separated default additional repository owners when `?repo-owners=` is omitted              |
+| `WHITELIST`           | No       | Case-insensitive comma-separated allowed GitHub usernames (unlisted requests return 403 no-store) |
 
-\* At least one token (`GITHUB_TOKEN1` or `PAT_1`) is required for authenticated
-GitHub GraphQL requests.
+\* At least one token among `GITHUB_TOKEN1`, `PAT_1`, `GITHUB_TOKEN2`, or
+`PAT_2` is required for authenticated GitHub GraphQL requests.
 
 ## Contributing
 

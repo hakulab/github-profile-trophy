@@ -8,7 +8,7 @@ routes = [{ pattern = "github-profile-trophy.hakula.xyz", custom_domain = true }
 GITHUB_API = "https://api.github.com/graphql"
 WHITELIST = "hakula139"
 # Optional comma-separated default additional repository owners when the
-# `repo-owners` query parameter is omitted (e.g., "org-a,org-b").
+# `repo-owners` query parameter is omitted.
 # DEFAULT_REPO_OWNERS = ""
 
 # Set via `wrangler secret put`:
