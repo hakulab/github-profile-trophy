@@ -1,11 +1,35 @@
 interface Language {
   name: string;
 }
+
 interface Repository {
+  nameWithOwner?: string;
   languages: { nodes: Language[] };
   stargazerCount: number;
   createdAt: string;
 }
+
+export interface RepositoryOwnerSummaryNode {
+  nameWithOwner: string;
+  stargazerCount: number;
+}
+
+export interface GitHubRepositoryOwner {
+  repositories: {
+    totalCount: number;
+    pageInfo: {
+      hasNextPage: boolean;
+      endCursor: string | null;
+    };
+    nodes: RepositoryOwnerSummaryNode[];
+  };
+}
+
+export interface RepositoryTotalsOverride {
+  totalRepositories: number;
+  totalStargazers: number;
+}
+
 export interface GitHubUserRepository {
   repositories: {
     totalCount: number;
@@ -63,8 +87,8 @@ export class UserInfo {
   public readonly joined2020: number;
   public readonly ogAccount: number;
 
-  static fromCombined(data: GitHubUserAll): UserInfo {
-    return new UserInfo(data, data, data, data);
+  static fromCombined(data: GitHubUserAll, repositoryTotals?: RepositoryTotalsOverride): UserInfo {
+    return new UserInfo(data, data, data, data, repositoryTotals);
   }
 
   constructor(
@@ -72,16 +96,16 @@ export class UserInfo {
     userIssue: GitHubUserIssue,
     userPullRequest: GitHubUserPullRequest,
     userRepository: GitHubUserRepository,
+    repositoryTotals?: RepositoryTotalsOverride,
   ) {
     const totalCommits =
       userActivity.contributionsCollection.restrictedContributionsCount +
       userActivity.contributionsCollection.totalCommitContributions;
-    const totalStargazers = userRepository.repositories.nodes.reduce(
-      (prev: number, node: Repository) => {
+    const totalStargazers =
+      repositoryTotals?.totalStargazers ??
+      userRepository.repositories.nodes.reduce((prev: number, node: Repository) => {
         return prev + node.stargazerCount;
-      },
-      0,
-    );
+      }, 0);
 
     const languages = new Set<string>();
     userRepository.repositories.nodes.forEach((node: Repository) => {
@@ -113,7 +137,8 @@ export class UserInfo {
     this.totalPullRequests = userPullRequest.pullRequests.totalCount;
     this.totalReviews = userActivity.contributionsCollection.totalPullRequestReviewContributions;
     this.totalStargazers = totalStargazers;
-    this.totalRepositories = userRepository.repositories.totalCount;
+    this.totalRepositories =
+      repositoryTotals?.totalRepositories ?? userRepository.repositories.totalCount;
     this.languageCount = languages.size;
     this.durationYear = durationYear;
     this.durationDays = durationDays;

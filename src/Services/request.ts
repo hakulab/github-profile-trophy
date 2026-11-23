@@ -10,17 +10,15 @@ export interface RequestGithubOptions {
 }
 
 interface GraphQLPayload<T> {
-  data?: {
-    user?: T | null;
-  };
+  data?: T;
   errors?: GithubError[];
   message?: string;
   documentation_url?: string;
 }
 
-export async function requestGithubData<T = unknown>(
+export async function requestGithubGraphQL<T = unknown>(
   query: string,
-  variables: Record<string, string>,
+  variables: Record<string, string | null | undefined>,
   options: RequestGithubOptions = {},
 ): Promise<T> {
   const apiUrl = options.apiUrl ?? CONSTANTS.DEFAULT_GITHUB_API;
@@ -60,11 +58,24 @@ export async function requestGithubData<T = unknown>(
     );
   }
 
-  if (responseData.data?.user) {
-    return responseData.data.user;
+  if (responseData.data !== undefined && responseData.data !== null) {
+    return responseData.data;
   }
 
   throw handleError(responseData, response.status);
+}
+
+export async function requestGithubData<T = unknown>(
+  query: string,
+  variables: Record<string, string | null | undefined>,
+  options: RequestGithubOptions = {},
+): Promise<T> {
+  const data = await requestGithubGraphQL<{ user?: T | null }>(query, variables, options);
+  if (data.user) {
+    return data.user;
+  }
+
+  throw new ServiceError('User not found', EServiceKindError.NOT_FOUND);
 }
 
 function getGraphQLErrorKind(errors: GithubError[]): EServiceKindError {

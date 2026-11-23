@@ -63,9 +63,36 @@ export const CONSTANTS = {
   DEFAULT_NO_FRAME: false,
   DEFAULT_GITHUB_API: 'https://api.github.com/graphql',
   DEFAULT_GITHUB_RETRY_DELAY: 500,
+  MAX_ADDITIONAL_REPO_OWNERS: 10,
   REVALIDATE_TIME: HOUR_IN_MILLISECONDS * 6,
   REDIS_TTL: HOUR_IN_MILLISECONDS * 4,
 };
+
+/**
+ * Parse, normalize, deduplicate, and sort additional repository owner logins.
+ * Excludes the primary username (case-insensitively) so its repositories are
+ * never fetched twice, and caps the result at `maxOwners`.
+ */
+export function normalizeRepoOwners(
+  rawValues: string[],
+  primaryUsername?: string,
+  maxOwners: number = CONSTANTS.MAX_ADDITIONAL_REPO_OWNERS,
+): string[] {
+  const primaryLower = primaryUsername?.trim().toLowerCase();
+  const owners = new Set<string>();
+
+  for (const raw of rawValues) {
+    for (const part of raw.split(',')) {
+      const normalized = part.trim().toLowerCase();
+      if (!normalized || normalized === primaryLower) {
+        continue;
+      }
+      owners.add(normalized);
+    }
+  }
+
+  return [...owners].toSorted((a, b) => a.localeCompare(b)).slice(0, maxOwners);
+}
 
 export enum RANK {
   SECRET = 'SECRET',

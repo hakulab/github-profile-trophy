@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { app, buildCacheKey } from '../app';
+import { app, buildCacheKey, resolveRepoOwners } from '../app';
 import { GithubRepository } from '../Repository/GithubRepository';
 import { EServiceKindError, ServiceError } from '../Types/index';
 import {
@@ -60,15 +60,15 @@ function createMockCache(): {
 
 class StubGithubRepository extends GithubRepository {
   public readonly requestUserInfoSpy =
-    vi.fn<(username: string) => Promise<UserInfo | ServiceError>>();
+    vi.fn<(username: string, repoOwners?: string[]) => Promise<UserInfo | ServiceError>>();
 
   constructor(result: UserInfo | ServiceError) {
     super();
     this.requestUserInfoSpy.mockResolvedValue(result);
   }
 
-  requestUserInfo(username: string): Promise<UserInfo | ServiceError> {
-    return this.requestUserInfoSpy(username);
+  requestUserInfo(username: string, repoOwners?: string[]): Promise<UserInfo | ServiceError> {
+    return this.requestUserInfoSpy(username, repoOwners);
   }
 
   requestUserAll(): Promise<GitHubUserAll | ServiceError> {
@@ -184,5 +184,74 @@ describe('app', () => {
     const a = buildCacheKey(new Request('https://trophy.example.com/?theme=dark&username=alice'));
     const b = buildCacheKey(new Request('https://trophy.example.com/?username=alice&theme=dark'));
     expect(a.url).toBe(b.url);
+  });
+
+  it('normalizes repo-owners and repo_owners aliases in buildCacheKey', () => {
+    const a = buildCacheKey(
+      new Request('https://trophy.example.com/?username=alice&repo-owners=org-b,Org-A,alice'),
+    );
+    const b = buildCacheKey(
+      new Request('https://trophy.example.com/?username=alice&repo_owners=%20org-a%20,%20org-b'),
+    );
+    const c = buildCacheKey(new Request('https://trophy.example.com/?username=alice'), {
+      DEFAULT_REPO_OWNERS: 'org-b, org-a',
+    });
+
+    expect(a.url).toBe(b.url);
+    expect(a.url).toBe(c.url);
+    expect(new URL(a.url).searchParams.get('repo-owners')).toBe('org-a,org-b');
+  });
+
+  it('isolates cache keys across distinct owner sets and explicit empty opt-out', () => {
+    const withDefault = buildCacheKey(new Request('https://trophy.example.com/?username=alice'), {
+      DEFAULT_REPO_OWNERS: 'org-a,org-b',
+    });
+    const optedOut = buildCacheKey(
+      new Request('https://trophy.example.com/?username=alice&repo-owners='),
+      { DEFAULT_REPO_OWNERS: 'org-a,org-b' },
+    );
+    const differentOwner = buildCacheKey(
+      new Request('https://trophy.example.com/?username=alice&repo-owners=org-a'),
+      { DEFAULT_REPO_OWNERS: 'org-a,org-b' },
+    );
+
+    expect(withDefault.url).not.toBe(optedOut.url);
+    expect(withDefault.url).not.toBe(differentOwner.url);
+    expect(optedOut.url).not.toContain('repo-owners=');
+  });
+
+  it('passes normalized repo-owners and DEFAULT_REPO_OWNERS fallback to client', async () => {
+    const client = new StubGithubRepository(createMockUserInfo());
+
+    await app(
+      new Request('https://trophy.example.com/?username=alice'),
+      { ENV_TYPE: 'test', DEFAULT_REPO_OWNERS: 'org-b, Org-A, alice' },
+      { client },
+    );
+    expect(client.requestUserInfoSpy).toHaveBeenLastCalledWith('alice', ['org-a', 'org-b']);
+
+    await app(
+      new Request('https://trophy.example.com/?username=alice&repo_owners=Beta-Org,alpha-org'),
+      { ENV_TYPE: 'test', DEFAULT_REPO_OWNERS: 'org-a' },
+      { client },
+    );
+    expect(client.requestUserInfoSpy).toHaveBeenLastCalledWith('alice', ['alpha-org', 'beta-org']);
+
+    await app(
+      new Request('https://trophy.example.com/?username=alice&repo-owners='),
+      { ENV_TYPE: 'test', DEFAULT_REPO_OWNERS: 'org-a' },
+      { client },
+    );
+    expect(client.requestUserInfoSpy).toHaveBeenLastCalledWith('alice', []);
+  });
+
+  it('caps additional repo-owners at MAX_ADDITIONAL_REPO_OWNERS', () => {
+    const owners = Array.from({ length: 15 }, (_, i) => `org${String(i).padStart(2, '0')}`).join(
+      ',',
+    );
+    const resolved = resolveRepoOwners(new URLSearchParams({ 'repo-owners': owners }), {}, 'alice');
+    expect(resolved).toHaveLength(10);
+    expect(resolved[0]).toBe('org00');
+    expect(resolved[9]).toBe('org09');
   });
 });
