@@ -1,5 +1,5 @@
-import { RANK } from "./utils.ts";
-import { Theme } from "./theme.ts";
+import { type Theme } from './theme';
+import { RANK } from './utils';
 
 const leafIcon = (laurel: string): string => {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="90pt" height="90pt" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
@@ -26,11 +26,7 @@ Created by potrace 1.15, written by Peter Selinger 2001-2017
 </svg>`;
 };
 
-export const getNextRankBar = (
-  title: string,
-  percentage: number,
-  color: string,
-): string => {
+export const getNextRankBar = (title: string, percentage: number, color: string): string => {
   const maxWidth = 80;
   return `
     <style>
@@ -66,11 +62,7 @@ export const getNextRankBar = (
   `;
 };
 
-const getSmallTrophyIcon = (
-  icon: string,
-  color: string,
-  count: number,
-): string => {
+const getSmallTrophyIcon = (icon: string, color: string, count: number): string => {
   const leftXPosition = 7;
   const rightXPosition = 68;
   const getIcon = (x: number) => {
@@ -78,20 +70,20 @@ const getSmallTrophyIcon = (
       ${icon}
     </svg>`;
   };
-  if (count == 1) {
+  if (count === 1) {
     // Double Rank
     return getIcon(rightXPosition);
-  } else if (count == 2) {
+  } else if (count === 2) {
     // Triple Rank
     return `${getIcon(leftXPosition)}${getIcon(rightXPosition)}`;
   }
   // Single Rank
-  return "";
+  return '';
 };
 export const getTrophyIcon = (theme: Theme, rank = RANK.UNKNOWN) => {
   let color = theme.DEFAULT_RANK_BASE;
   let rankColor = theme.DEFAULT_RANK_TEXT;
-  let backgroundIcon = "";
+  let backgroundIcon = '';
   let gradationColor = `
       <stop offset="0%" stop-color="${theme.DEFAULT_RANK_BASE}"/>
       <stop offset="50%" stop-color="${theme.DEFAULT_RANK_BASE}"/>
@@ -105,7 +97,7 @@ export const getTrophyIcon = (theme: Theme, rank = RANK.UNKNOWN) => {
     <stop offset="50%" stop-color="${theme.SECRET_RANK_2}"/>
     <stop offset="100%" stop-color="${theme.SECRET_RANK_3}"/>
     `;
-  } else if (rank.slice(0, 1) === RANK.S) {
+  } else if (rank.startsWith(RANK.S)) {
     color = theme.S_RANK_BASE;
     rankColor = theme.S_RANK_TEXT;
     backgroundIcon = leafIcon(theme.LAUREL);
@@ -114,7 +106,7 @@ export const getTrophyIcon = (theme: Theme, rank = RANK.UNKNOWN) => {
     <stop offset="70%" stop-color="${color}"/>
     <stop offset="100%" stop-color="${theme.S_RANK_SHADOW}"/>
     `;
-  } else if (rank.slice(0, 1) === RANK.A) {
+  } else if (rank.startsWith(RANK.A)) {
     color = theme.A_RANK_BASE;
     rankColor = theme.A_RANK_TEXT;
     backgroundIcon = leafIcon(theme.LAUREL);
@@ -138,9 +130,10 @@ export const getTrophyIcon = (theme: Theme, rank = RANK.UNKNOWN) => {
     <path fill-rule="evenodd" d="M12.5 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm-3 2a3 3 0 1 1 6 0 3 3 0 0 1-6 0zm-6-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm-3 2a3 3 0 1 1 6 0 3 3 0 0 1-6 0z"/>
     <path d="M3 1h10c-.495 3.467-.5 10-5 10S3.495 4.467 3 1zm0 15a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1H3zm2-1a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1H5z"/>
     <circle cx="8" cy="6" r="4" fill="${ICON_CIRCLE}" />
-    <text x="6" y="8" font-family="Courier, Monospace" font-size="7" fill="${rankColor}">${
-    rank.slice(0, 1)
-  }</text>
+    <text x="6" y="8" font-family="Courier, Monospace" font-size="7" fill="${rankColor}">${rank.slice(
+      0,
+      1,
+    )}</text>
   `;
   const optionRankIcon = getSmallTrophyIcon(icon, color, rank.length - 1);
   return `

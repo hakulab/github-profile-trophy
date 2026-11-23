@@ -1,5 +1,5 @@
-import { EServiceKindError, ServiceError } from "../Types/index.ts";
-import { Error400, Error404, Error419, Error502 } from "../error_page.ts";
+import { Error400, Error404, Error419, Error502 } from '../error_page';
+import { EServiceKindError, type ServiceError } from '../Types/index';
 
 interface ErrorPageProps {
   error: ServiceError;
@@ -13,13 +13,11 @@ export function ErrorPage({ error }: ErrorPageProps) {
   }
 
   if (error.cause === EServiceKindError.NOT_FOUND) {
-    cause = new Error404(
-      "Sorry, the user you are looking for was not found.",
-    );
+    cause = new Error404('Sorry, the user you are looking for was not found.');
   }
 
   if (error.cause === EServiceKindError.UPSTREAM) {
-    cause = new Error502("GitHub returned an unexpected response.");
+    cause = new Error502('GitHub returned an unexpected response.');
   }
 
   return cause;

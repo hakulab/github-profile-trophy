@@ -6,9 +6,7 @@
     "errors": [
       {
         "type": "NOT_FOUND",
-        "path": [
-          "user"
-        ],
+        "path": ["user"],
         "locations": [
           {
             "line": 2,

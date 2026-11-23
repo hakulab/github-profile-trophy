@@ -1,14 +1,14 @@
-import { UserInfo } from "./user_info.ts";
-import { TrophyList } from "./trophy_list.ts";
-import { Trophy } from "./trophy.ts";
-import { Theme } from "./theme.ts";
+import { type Theme } from './theme';
+import { type Trophy } from './trophy';
+import { TrophyList } from './trophy_list';
+import { type UserInfo } from './user_info';
 
 export class Card {
   private width = 0;
   private height = 0;
   constructor(
-    private titles: Array<string>,
-    private ranks: Array<string>,
+    private titles: string[],
+    private ranks: string[],
     private maxColumn: number,
     private maxRow: number,
     private panelSize: number,
@@ -17,37 +17,30 @@ export class Card {
     private noBackground: boolean,
     private noFrame: boolean,
   ) {
-    this.width = panelSize * this.maxColumn +
-      this.marginWidth * (this.maxColumn - 1);
+    this.width = panelSize * this.maxColumn + this.marginWidth * (this.maxColumn - 1);
   }
-  render(
-    userInfo: UserInfo,
-    theme: Theme,
-  ): string {
+  render(userInfo: UserInfo, theme: Theme): string {
     const trophyList = new TrophyList(userInfo);
 
     trophyList.filterByHidden();
 
-    if (this.titles.length != 0) {
-      const includeTitles = this.titles.filter((title) =>
-        !title.startsWith("-")
-      );
+    if (this.titles.length !== 0) {
+      const includeTitles = this.titles.filter((title) => !title.startsWith('-'));
       if (includeTitles.length > 0) {
         trophyList.filterByTitles(includeTitles);
       }
       trophyList.filterByExclusionTitles(this.titles);
     }
 
-    if (this.ranks.length != 0) {
+    if (this.ranks.length !== 0) {
       trophyList.filterByRanks(this.ranks);
     }
 
     trophyList.sortByRank();
 
-    if (this.maxColumn == -1) {
+    if (this.maxColumn === -1) {
       this.maxColumn = trophyList.length;
-      this.width = this.panelSize * this.maxColumn +
-        this.marginWidth * (this.maxColumn - 1);
+      this.width = this.panelSize * this.maxColumn + this.marginWidth * (this.maxColumn - 1);
     }
 
     const row = this.getRow(trophyList);
@@ -77,24 +70,12 @@ export class Card {
   }
 
   private renderTrophy(trophyList: TrophyList, theme: Theme) {
-    return trophyList.getArray.reduce(
-      (sum: string, trophy: Trophy, i: number) => {
-        const currentColumn = i % this.maxColumn;
-        const currentRow = Math.floor(i / this.maxColumn);
-        const x = this.panelSize * currentColumn +
-          this.marginWidth * currentColumn;
-        const y = this.panelSize * currentRow + this.marginHeight * currentRow;
-        return sum +
-          trophy.render(
-            theme,
-            x,
-            y,
-            this.panelSize,
-            this.noBackground,
-            this.noFrame,
-          );
-      },
-      "",
-    );
+    return trophyList.getArray.reduce((sum: string, trophy: Trophy, i: number) => {
+      const currentColumn = i % this.maxColumn;
+      const currentRow = Math.floor(i / this.maxColumn);
+      const x = this.panelSize * currentColumn + this.marginWidth * currentColumn;
+      const y = this.panelSize * currentRow + this.marginHeight * currentRow;
+      return sum + trophy.render(theme, x, y, this.panelSize, this.noBackground, this.noFrame);
+    }, '');
   }
 }

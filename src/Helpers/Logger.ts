@@ -1,19 +1,28 @@
-const enableLogging = Deno.env.get("ENV_TYPE") !== "test";
+let loggingEnabled = true;
 
-export class Logger {
-  public static log(message: unknown): void {
-    if (!enableLogging) return;
-    console.log(message);
-  }
-
-  public static error(message: unknown): void {
-    if (!enableLogging) return;
-
-    console.error(message);
-  }
-  public static warn(message: unknown): void {
-    if (!enableLogging) return;
-
-    console.warn(message);
-  }
+export function setLoggingEnabled(enabled: boolean): void {
+  loggingEnabled = enabled;
 }
+
+export const Logger = {
+  log(message: unknown): void {
+    if (!loggingEnabled) {
+      return;
+    }
+    console.log(message);
+  },
+
+  error(message: unknown): void {
+    if (!loggingEnabled) {
+      return;
+    }
+    console.error(message);
+  },
+
+  warn(message: unknown): void {
+    if (!loggingEnabled) {
+      return;
+    }
+    console.warn(message);
+  },
+};

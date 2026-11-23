@@ -1,32 +1,34 @@
-type Language = { name: string };
-type Repository = {
+interface Language {
+  name: string;
+}
+interface Repository {
   languages: { nodes: Language[] };
   stargazerCount: number;
   createdAt: string;
-};
-export type GitHubUserRepository = {
+}
+export interface GitHubUserRepository {
   repositories: {
     totalCount: number;
     nodes: Repository[];
   };
-};
+}
 
-export type GitHubUserIssue = {
+export interface GitHubUserIssue {
   openIssues: {
     totalCount: number;
   };
   closedIssues: {
     totalCount: number;
   };
-};
+}
 
-export type GitHubUserPullRequest = {
+export interface GitHubUserPullRequest {
   pullRequests: {
     totalCount: number;
   };
-};
+}
 
-export type GitHubUserActivity = {
+export interface GitHubUserActivity {
   createdAt: string;
   contributionsCollection: {
     totalCommitContributions: number;
@@ -39,13 +41,12 @@ export type GitHubUserActivity = {
   followers: {
     totalCount: number;
   };
-};
+}
 
-export type GitHubUserAll =
-  & GitHubUserActivity
-  & GitHubUserIssue
-  & GitHubUserPullRequest
-  & GitHubUserRepository;
+export type GitHubUserAll = GitHubUserActivity &
+  GitHubUserIssue &
+  GitHubUserPullRequest &
+  GitHubUserRepository;
 export class UserInfo {
   public readonly totalCommits: number;
   public readonly totalFollowers: number;
@@ -84,47 +85,33 @@ export class UserInfo {
 
     const languages = new Set<string>();
     userRepository.repositories.nodes.forEach((node: Repository) => {
-      if (node.languages.nodes != undefined) {
-        node.languages.nodes.forEach((node: Language) => {
-          if (node != undefined) {
-            languages.add(node.name);
-          }
-        });
-      }
+      node.languages.nodes.forEach((lang: Language) => {
+        languages.add(lang.name);
+      });
     });
 
     // Find the earliest repository creation date
     let earliestRepoDate = userActivity.createdAt; // start with the oldest possible
 
-    earliestRepoDate = userRepository.repositories.nodes.reduce(
-      (earliest, node) => {
-        return new Date(node.createdAt).getTime() < new Date(earliest).getTime()
-          ? node.createdAt
-          : earliest;
-      },
-      earliestRepoDate,
-    );
+    earliestRepoDate = userRepository.repositories.nodes.reduce((earliest, node) => {
+      return new Date(node.createdAt).getTime() < new Date(earliest).getTime()
+        ? node.createdAt
+        : earliest;
+    }, earliestRepoDate);
 
-    const durationTime = new Date().getTime() -
-      new Date(earliestRepoDate).getTime();
+    const durationTime = new Date().getTime() - new Date(earliestRepoDate).getTime();
     const durationYear = new Date(durationTime).getUTCFullYear() - 1970;
-    const durationDays = Math.floor(
-      durationTime / (1000 * 60 * 60 * 24) / 100,
-    );
-    const ancientAccount = new Date(earliestRepoDate).getFullYear() <= 2010
-      ? 1
-      : 0;
-    const joined2020 = new Date(earliestRepoDate).getFullYear() == 2020 ? 1 : 0;
+    const durationDays = Math.floor(durationTime / (1000 * 60 * 60 * 24) / 100);
+    const ancientAccount = new Date(earliestRepoDate).getFullYear() <= 2010 ? 1 : 0;
+    const joined2020 = new Date(earliestRepoDate).getFullYear() === 2020 ? 1 : 0;
     const ogAccount = new Date(earliestRepoDate).getFullYear() <= 2008 ? 1 : 0;
 
     this.totalCommits = totalCommits;
     this.totalFollowers = userActivity.followers.totalCount;
-    this.totalIssues = userIssue.openIssues.totalCount +
-      userIssue.closedIssues.totalCount;
+    this.totalIssues = userIssue.openIssues.totalCount + userIssue.closedIssues.totalCount;
     this.totalOrganizations = userActivity.organizations.totalCount;
     this.totalPullRequests = userPullRequest.pullRequests.totalCount;
-    this.totalReviews =
-      userActivity.contributionsCollection.totalPullRequestReviewContributions;
+    this.totalReviews = userActivity.contributionsCollection.totalPullRequestReviewContributions;
     this.totalStargazers = totalStargazers;
     this.totalRepositories = userRepository.repositories.totalCount;
     this.languageCount = languages.size;

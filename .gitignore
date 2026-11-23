@@ -1,6 +1,20 @@
-.vscode
-.env
-.idea
-deno.lock
-*.sh
-**/.DS_Store
+# Dependencies
+node_modules/
+coverage/
+
+# Nix
+.direnv/
+/.pre-commit-config.yaml
+/result
+/result-*
+
+# Wrangler
+.dev.vars*
+.wrangler/
+
+# Assistant local state
+**/.agents/plans/
+**/.claude/agent-memory-local/
+**/.claude/plans/
+**/.claude/settings.local.json
+**/.claude/worktrees/

@@ -1,0 +1,31 @@
+{
+  "name": "github-profile-trophy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Add dynamically generated GitHub Stat Trophies on your readme, running on Cloudflare Workers",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^12.0.0",
+      "onFail": "error"
+    }
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "upload": "wrangler versions upload",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261110.1",
+    "@hakula139/eslint-config": "^1.0.0",
+    "eslint": "^10.14.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.2",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.159.0"
+  }
+}
