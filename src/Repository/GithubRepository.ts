@@ -9,7 +9,10 @@ import {
 } from '../user_info';
 
 export abstract class GithubRepository {
-  abstract requestUserInfo(username: string): Promise<UserInfo | ServiceError>;
+  abstract requestUserInfo(
+    username: string,
+    repoOwners?: string[],
+  ): Promise<UserInfo | ServiceError>;
   abstract requestUserAll(username: string): Promise<GitHubUserAll | ServiceError>;
   abstract requestUserActivity(username: string): Promise<GitHubUserActivity | ServiceError>;
   abstract requestUserIssue(username: string): Promise<GitHubUserIssue | ServiceError>;

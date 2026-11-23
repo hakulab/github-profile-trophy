@@ -86,6 +86,7 @@ export const queryUserAll = `
       repositories(first: 50, ownerAffiliations: OWNER, orderBy: {direction: DESC, field: STARGAZERS}) {
         totalCount
         nodes {
+          nameWithOwner
           languages(first: 2, orderBy: {direction:DESC, field: SIZE}) {
             nodes {
               name
@@ -93,6 +94,29 @@ export const queryUserAll = `
           }
           stargazerCount
           createdAt
+        }
+      }
+    }
+  }
+`;
+
+export const queryRepositoryOwnerRepositories = `
+  query repositoryOwnerRepositories($login: String!, $after: String) {
+    repositoryOwner(login: $login) {
+      repositories(
+        first: 100
+        after: $after
+        ownerAffiliations: [OWNER]
+        orderBy: {direction: DESC, field: STARGAZERS}
+      ) {
+        totalCount
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          nameWithOwner
+          stargazerCount
         }
       }
     }

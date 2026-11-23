@@ -6,6 +6,9 @@ routes = [{ pattern = "github-profile-trophy.hakula.xyz", custom_domain = true }
 
 [vars]
 GITHUB_API = "https://api.github.com/graphql"
+# Optional comma-separated default additional repository owners when the
+# `repo-owners` query parameter is omitted (e.g., "hakulab,hakulattic").
+# DEFAULT_REPO_OWNERS = ""
 
 # Set via `wrangler secret put`:
 # GITHUB_TOKEN1 - Primary GitHub personal access token for GraphQL API

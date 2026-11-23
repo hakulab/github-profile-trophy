@@ -3,6 +3,7 @@ import { Logger } from '../Helpers/Logger';
 import { Retry } from '../Helpers/Retry';
 import { GithubRepository } from '../Repository/GithubRepository';
 import {
+  queryRepositoryOwnerRepositories,
   queryUserActivity,
   queryUserAll,
   queryUserIssue,
@@ -12,14 +13,16 @@ import {
 import { EServiceKindError, ServiceError } from '../Types/index';
 import {
   UserInfo,
+  type GitHubRepositoryOwner,
   type GitHubUserActivity,
   type GitHubUserAll,
   type GitHubUserIssue,
   type GitHubUserPullRequest,
   type GitHubUserRepository,
+  type RepositoryOwnerSummaryNode,
 } from '../user_info';
-import { CONSTANTS } from '../utils';
-import { requestGithubData, type FetchLike } from './request';
+import { CONSTANTS, normalizeRepoOwners } from '../utils';
+import { requestGithubData, requestGithubGraphQL, type FetchLike } from './request';
 
 export interface GithubApiServiceOptions {
   tokens?: (string | undefined)[];
@@ -81,22 +84,126 @@ export class GithubApiService extends GithubRepository {
     return await this.executeQuery<GitHubUserPullRequest>(queryUserPullRequest, { username });
   }
 
-  async requestUserInfo(username: string): Promise<UserInfo | ServiceError> {
-    try {
-      const result = await this.requestUserAll(username);
-      if (result instanceof ServiceError) {
-        return result;
+  async requestOwnerRepositories(
+    login: string,
+  ): Promise<{ totalCount: number; nodes: RepositoryOwnerSummaryNode[] } | ServiceError> {
+    const nodes: RepositoryOwnerSummaryNode[] = [];
+    let after: string | null = null;
+
+    for (;;) {
+      const page: { repositoryOwner?: GitHubRepositoryOwner | null } | ServiceError =
+        await this.executeGraphQLQuery<{
+          repositoryOwner?: GitHubRepositoryOwner | null;
+        }>(queryRepositoryOwnerRepositories, { login, after });
+      if (page instanceof ServiceError) {
+        return page;
       }
-      return UserInfo.fromCombined(result);
+
+      const owner: GitHubRepositoryOwner | null | undefined = page.repositoryOwner;
+      if (!owner) {
+        return new ServiceError(
+          `Repository owner "${login}" not found`,
+          EServiceKindError.NOT_FOUND,
+        );
+      }
+
+      const pageNodes = owner.repositories.nodes;
+      nodes.push(...pageNodes);
+
+      const hasNextPage: boolean = owner.repositories.pageInfo.hasNextPage;
+      const nextCursor: string | null = owner.repositories.pageInfo.endCursor;
+      const lastNode = pageNodes.at(-1);
+      // Ordered by STARGAZERS DESC: once the tail has 0 stars, remaining pages add 0 stars.
+      if (!hasNextPage || !nextCursor || lastNode?.stargazerCount === 0) {
+        return { totalCount: owner.repositories.totalCount, nodes };
+      }
+      after = nextCursor;
+    }
+  }
+
+  async requestUserInfo(
+    username: string,
+    repoOwners: string[] = [],
+  ): Promise<UserInfo | ServiceError> {
+    try {
+      const normalizedAdditionalOwners = normalizeRepoOwners(repoOwners, username);
+      const userAllPromise = this.requestUserAll(username);
+
+      if (normalizedAdditionalOwners.length === 0) {
+        const result = await userAllPromise;
+        if (result instanceof ServiceError) {
+          return result;
+        }
+        return UserInfo.fromCombined(result);
+      }
+
+      const ownersToAggregate = [username.trim().toLowerCase(), ...normalizedAdditionalOwners];
+      const [userAll, ...ownerSummaries] = await Promise.all([
+        userAllPromise,
+        ...ownersToAggregate.map((owner) => this.requestOwnerRepositories(owner)),
+      ]);
+
+      if (userAll instanceof ServiceError) {
+        return userAll;
+      }
+
+      const seenRepos = new Map<string, number>();
+      let totalRepositories = 0;
+
+      for (const summary of ownerSummaries) {
+        if (summary instanceof ServiceError) {
+          return summary;
+        }
+
+        let duplicatesInOwner = 0;
+        for (const repo of summary.nodes) {
+          const key = repo.nameWithOwner.toLowerCase();
+          if (seenRepos.has(key)) {
+            duplicatesInOwner += 1;
+            continue;
+          }
+          seenRepos.set(key, repo.stargazerCount);
+        }
+
+        totalRepositories += Math.max(0, summary.totalCount - duplicatesInOwner);
+      }
+
+      let totalStargazers = 0;
+      for (const stars of seenRepos.values()) {
+        totalStargazers += stars;
+      }
+
+      return UserInfo.fromCombined(userAll, {
+        totalRepositories,
+        totalStargazers,
+      });
     } catch {
       Logger.error(`Error fetching user info for username: ${username}`);
       return new ServiceError('Not found', EServiceKindError.NOT_FOUND);
     }
   }
 
+  async executeGraphQLQuery<T = unknown>(
+    query: string,
+    variables: Record<string, string | null | undefined>,
+  ): Promise<T | ServiceError> {
+    try {
+      const retry = new Retry(this.tokens.length, this.retryDelay);
+      return await retry.fetch<T>(async ({ attempt }) => {
+        return await requestGithubGraphQL<T>(query, variables, {
+          apiUrl: this.apiUrl,
+          token: this.tokens[attempt],
+          fetchImpl: this.fetchImpl,
+        });
+      });
+    } catch (error) {
+      return this.toServiceError(error);
+    }
+  }
+
   async executeQuery<T = unknown>(
     query: string,
-    variables: Record<string, string>,
+    variables: Record<string, string | null | undefined>,
   ): Promise<T | ServiceError> {
     try {
       const retry = new Retry(this.tokens.length, this.retryDelay);
@@ -108,16 +215,20 @@ export class GithubApiService extends GithubRepository {
         });
       });
     } catch (error) {
-      if (error instanceof Error && error.cause instanceof ServiceError) {
-        Logger.error(error.cause.message);
-        return error.cause;
-      }
-      if (error instanceof Error && error.cause) {
-        Logger.error(JSON.stringify(error.cause, null, 2));
-      } else {
-        Logger.error(error);
-      }
-      return new ServiceError('not found', EServiceKindError.NOT_FOUND);
+      return this.toServiceError(error);
     }
+  }
+
+  private toServiceError(error: unknown): ServiceError {
+    if (error instanceof Error && error.cause instanceof ServiceError) {
+      Logger.error(error.cause.message);
+      return error.cause;
+    }
+    if (error instanceof Error && error.cause) {
+      Logger.error(JSON.stringify(error.cause, null, 2));
+    } else {
+      Logger.error(error);
+    }
+    return new ServiceError('not found', EServiceKindError.NOT_FOUND);
   }
 }
