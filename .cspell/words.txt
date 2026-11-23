@@ -10,7 +10,6 @@ gitdimmed
 gruvbox
 hakula
 hakulab
-hakulattic
 juicyfresh
 kimbie
 maxage
