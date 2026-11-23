@@ -7,7 +7,7 @@ import { GithubRepositoryService, type GithubRepository } from './Repository/Git
 import { GithubApiService } from './Services/GithubApiService';
 import { COLORS, type Theme } from './theme';
 import { ServiceError } from './Types/index';
-import { CONSTANTS, parseParams } from './utils';
+import { CONSTANTS, normalizeRepoOwners, parseParams } from './utils';
 
 export interface AppDependencies {
   client?: GithubRepository;
@@ -24,9 +24,42 @@ const cacheControlHeader = [
 
 const errorCacheControlHeader = 'no-store';
 
-export function buildCacheKey(request: Request): Request {
+export function resolveRepoOwners(
+  searchParams: URLSearchParams,
+  env: Pick<Env, 'DEFAULT_REPO_OWNERS'> = {},
+  primaryUsername?: string,
+): string[] {
+  const hasExplicitParam = searchParams.has('repo-owners') || searchParams.has('repo_owners');
+  const rawValues = hasExplicitParam
+    ? [...searchParams.getAll('repo-owners'), ...searchParams.getAll('repo_owners')]
+    : env.DEFAULT_REPO_OWNERS
+      ? [env.DEFAULT_REPO_OWNERS]
+      : [];
+
+  return normalizeRepoOwners(rawValues, primaryUsername);
+}
+
+export function buildCacheKey(
+  request: Request,
+  env: Pick<Env, 'DEFAULT_REPO_OWNERS'> = {},
+): Request {
   const url = new URL(request.url);
-  const sortedEntries = [...url.searchParams.entries()].toSorted(([aKey, aVal], [bKey, bVal]) => {
+  const username = url.searchParams.get('username') ?? undefined;
+  const effectiveOwners = resolveRepoOwners(url.searchParams, env, username);
+
+  const entries: [string, string][] = [];
+  for (const [key, value] of url.searchParams.entries()) {
+    if (key === 'repo-owners' || key === 'repo_owners') {
+      continue;
+    }
+    entries.push([key, value]);
+  }
+
+  if (effectiveOwners.length > 0) {
+    entries.push(['repo-owners', effectiveOwners.join(',')]);
+  }
+
+  const sortedEntries = entries.toSorted(([aKey, aVal], [bKey, bVal]) => {
     const keyCompare = aKey.localeCompare(bKey);
     return keyCompare !== 0 ? keyCompare : aVal.localeCompare(bVal);
   });
@@ -63,7 +96,7 @@ export async function app(
   }
 
   const cache = deps.cache;
-  const cacheKey = cache ? buildCacheKey(req) : null;
+  const cacheKey = cache ? buildCacheKey(req, env) : null;
   if (cache && cacheKey) {
     const cached = await cache.match(cacheKey);
     if (cached) {
@@ -149,8 +182,10 @@ export async function app(
     .flatMap((r) => r.split(','))
     .map((r) => r.trim());
 
+  const repoOwners = resolveRepoOwners(params, env, username);
+
   const client = deps.client ?? new GithubRepositoryService(new GithubApiService(env)).repository;
-  const userInfo = await client.requestUserInfo(username);
+  const userInfo = await client.requestUserInfo(username, repoOwners);
 
   if (userInfo instanceof ServiceError) {
     return new Response(ErrorPage({ error: userInfo }).render(), {
