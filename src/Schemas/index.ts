@@ -116,6 +116,9 @@ export const queryRepositoryOwnerRepositories = `
         }
         nodes {
           nameWithOwner
+          primaryLanguage {
+            name
+          }
           stargazerCount
         }
       }

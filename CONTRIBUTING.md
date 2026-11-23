@@ -15,10 +15,12 @@ token (see [env-example](./env-example)). Grant the `read:user` and
 ```properties
 GITHUB_TOKEN1=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 GITHUB_TOKEN2=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+# PAT_1 / PAT_2 are also accepted as aliases.
 
-# Optional, when using GitHub Enterprise:
-# (defaults to https://api.github.com/graphql)
-GITHUB_API=https://github.example.com/api/graphql
+# Optional:
+# GITHUB_API=https://github.example.com/api/graphql
+# DEFAULT_REPO_OWNERS=org-a,org-b
+# WHITELIST=alice,bob
 ```
 
 Run the local Workers dev server:
@@ -29,7 +31,7 @@ pnpm dev
 
 Open localhost from your browser:
 
-<http://localhost:8787/?username=ryo-ma>
+<http://localhost:8787/?username=alice>
 
 ## Editor config
 

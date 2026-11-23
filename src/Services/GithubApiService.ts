@@ -31,11 +31,14 @@ export interface GithubApiServiceOptions {
   fetchImpl?: FetchLike;
 }
 
-export function resolveTokens(env: Pick<Env, 'GITHUB_TOKEN1' | 'GITHUB_TOKEN2'>): string[] {
-  const configured = [env.GITHUB_TOKEN1, env.GITHUB_TOKEN2].filter(
+export function resolveTokens(
+  env: Pick<Env, 'GITHUB_TOKEN1' | 'GITHUB_TOKEN2' | 'PAT_1' | 'PAT_2'>,
+): string[] {
+  const configured = [env.GITHUB_TOKEN1, env.PAT_1, env.GITHUB_TOKEN2, env.PAT_2].filter(
     (token): token is string => typeof token === 'string' && token.length > 0,
   );
-  return configured.length > 0 ? configured : [''];
+  const unique = [...new Set(configured)];
+  return unique.length > 0 ? unique : [''];
 }
 
 export class GithubApiService extends GithubRepository {
@@ -46,11 +49,14 @@ export class GithubApiService extends GithubRepository {
 
   constructor(env: Env = {}, options: GithubApiServiceOptions = {}) {
     super();
-    const rawTokens = options.tokens ?? [env.GITHUB_TOKEN1, env.GITHUB_TOKEN2];
-    const filtered = rawTokens.filter(
-      (token): token is string => typeof token === 'string' && token.length > 0,
-    );
-    this.tokens = filtered.length > 0 ? filtered : [''];
+    if (options.tokens) {
+      const filtered = options.tokens.filter(
+        (token): token is string => typeof token === 'string' && token.length > 0,
+      );
+      this.tokens = filtered.length > 0 ? filtered : [''];
+    } else {
+      this.tokens = resolveTokens(env);
+    }
     this.apiUrl = options.apiUrl ?? env.GITHUB_API ?? CONSTANTS.DEFAULT_GITHUB_API;
     this.retryDelay = options.retryDelay ?? CONSTANTS.DEFAULT_GITHUB_RETRY_DELAY;
     this.fetchImpl = options.fetchImpl;
@@ -112,9 +118,7 @@ export class GithubApiService extends GithubRepository {
 
       const hasNextPage: boolean = owner.repositories.pageInfo.hasNextPage;
       const nextCursor: string | null = owner.repositories.pageInfo.endCursor;
-      const lastNode = pageNodes.at(-1);
-      // Ordered by STARGAZERS DESC: once the tail has 0 stars, remaining pages add 0 stars.
-      if (!hasNextPage || !nextCursor || lastNode?.stargazerCount === 0) {
+      if (!hasNextPage || !nextCursor) {
         return { totalCount: owner.repositories.totalCount, nodes };
       }
       after = nextCursor;
@@ -148,6 +152,15 @@ export class GithubApiService extends GithubRepository {
       }
 
       const seenRepos = new Map<string, number>();
+      const languages = new Set<string>();
+      for (const repo of userAll.repositories.nodes) {
+        for (const lang of repo.languages.nodes) {
+          if (lang.name) {
+            languages.add(lang.name);
+          }
+        }
+      }
+
       let totalRepositories = 0;
 
       for (const summary of ownerSummaries) {
@@ -163,6 +176,10 @@ export class GithubApiService extends GithubRepository {
             continue;
           }
           seenRepos.set(key, repo.stargazerCount);
+          const primaryLanguageName = repo.primaryLanguage?.name;
+          if (primaryLanguageName) {
+            languages.add(primaryLanguageName);
+          }
         }
 
         totalRepositories += Math.max(0, summary.totalCount - duplicatesInOwner);
@@ -176,6 +193,7 @@ export class GithubApiService extends GithubRepository {
       return UserInfo.fromCombined(userAll, {
         totalRepositories,
         totalStargazers,
+        languageCount: languages.size,
       });
     } catch {
       Logger.error(`Error fetching user info for username: ${username}`);

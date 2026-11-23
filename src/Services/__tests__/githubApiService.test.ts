@@ -6,7 +6,7 @@ import successGithubResponse from '../__mocks__/successGithubResponse.json';
 import { setLoggingEnabled } from '../../Helpers/Logger';
 import { EServiceKindError, ServiceError } from '../../Types/index';
 import { UserInfo, type GitHubUserAll, type GitHubUserRepository } from '../../user_info';
-import { GithubApiService } from '../GithubApiService';
+import { GithubApiService, resolveTokens } from '../GithubApiService';
 
 setLoggingEnabled(false);
 
@@ -221,8 +221,16 @@ describe('GithubApiService', () => {
                 totalCount: 3,
                 pageInfo: { hasNextPage: true, endCursor: 'cursor-1' },
                 nodes: [
-                  { nameWithOwner: 'alice/top-repo', stargazerCount: 40 },
-                  { nameWithOwner: 'alice/second-repo', stargazerCount: 15 },
+                  {
+                    nameWithOwner: 'alice/top-repo',
+                    primaryLanguage: { name: 'TypeScript' },
+                    stargazerCount: 40,
+                  },
+                  {
+                    nameWithOwner: 'alice/second-repo',
+                    primaryLanguage: { name: 'Rust' },
+                    stargazerCount: 15,
+                  },
                 ],
               },
             },
@@ -237,14 +245,20 @@ describe('GithubApiService', () => {
               repositories: {
                 totalCount: 3,
                 pageInfo: { hasNextPage: false, endCursor: null },
-                nodes: [{ nameWithOwner: 'alice/third-repo', stargazerCount: 5 }],
+                nodes: [
+                  {
+                    nameWithOwner: 'alice/third-repo',
+                    primaryLanguage: null,
+                    stargazerCount: 5,
+                  },
+                ],
               },
             },
           },
         });
       }
 
-      if (body.variables.login === 'acme-org') {
+      if (body.variables.login === 'acme-org' && !body.variables.after) {
         return jsonResponse({
           data: {
             repositoryOwner: {
@@ -252,9 +266,46 @@ describe('GithubApiService', () => {
                 totalCount: 5,
                 pageInfo: { hasNextPage: true, endCursor: 'zero-star-tail' },
                 nodes: [
-                  { nameWithOwner: 'acme-org/project-one', stargazerCount: 25 },
-                  { nameWithOwner: 'ALICE/top-repo', stargazerCount: 40 },
-                  { nameWithOwner: 'acme-org/zero-star', stargazerCount: 0 },
+                  {
+                    nameWithOwner: 'acme-org/project-one',
+                    primaryLanguage: { name: 'Go' },
+                    stargazerCount: 25,
+                  },
+                  {
+                    nameWithOwner: 'ALICE/top-repo',
+                    primaryLanguage: { name: 'Haskell' },
+                    stargazerCount: 40,
+                  },
+                  {
+                    nameWithOwner: 'acme-org/zero-star',
+                    primaryLanguage: { name: 'Nix' },
+                    stargazerCount: 0,
+                  },
+                ],
+              },
+            },
+          },
+        });
+      }
+
+      if (body.variables.login === 'acme-org' && body.variables.after === 'zero-star-tail') {
+        return jsonResponse({
+          data: {
+            repositoryOwner: {
+              repositories: {
+                totalCount: 5,
+                pageInfo: { hasNextPage: false, endCursor: null },
+                nodes: [
+                  {
+                    nameWithOwner: 'acme-org/zero-star-two',
+                    primaryLanguage: { name: 'Python' },
+                    stargazerCount: 0,
+                  },
+                  {
+                    nameWithOwner: 'acme-org/docs-only',
+                    primaryLanguage: null,
+                    stargazerCount: 0,
+                  },
                 ],
               },
             },
@@ -270,8 +321,16 @@ describe('GithubApiService', () => {
                 totalCount: 2,
                 pageInfo: { hasNextPage: false, endCursor: null },
                 nodes: [
-                  { nameWithOwner: 'acme-archive/archive-one', stargazerCount: 12 },
-                  { nameWithOwner: 'acme-archive/archive-two', stargazerCount: 3 },
+                  {
+                    nameWithOwner: 'acme-archive/archive-one',
+                    primaryLanguage: { name: 'Rust' },
+                    stargazerCount: 12,
+                  },
+                  {
+                    nameWithOwner: 'acme-archive/archive-two',
+                    primaryLanguage: { name: 'Shell' },
+                    stargazerCount: 3,
+                  },
                 ],
               },
             },
@@ -304,8 +363,8 @@ describe('GithubApiService', () => {
     expect(info.totalPullRequests).toBe(45);
     expect(info.totalReviews).toBe(15);
     expect(info.totalOrganizations).toBe(2);
-    expect(info.languageCount).toBe(1);
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(info.languageCount).toBe(6);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
   });
 
   it('surfaces 404 ServiceError when an additional repository owner does not exist', async () => {
@@ -416,5 +475,17 @@ describe('GithubApiService', () => {
     expect(error).toBeInstanceOf(ServiceError);
     expect((error as ServiceError).code).toBe(419);
     expect((error as ServiceError).cause).toBe(EServiceKindError.RATE_LIMIT);
+  });
+
+  it('accepts PAT_1 and PAT_2 aliases alongside GITHUB_TOKEN1 and GITHUB_TOKEN2', () => {
+    expect(resolveTokens({ PAT_1: 'pat-1', PAT_2: 'pat-2' })).toEqual(['pat-1', 'pat-2']);
+    expect(
+      resolveTokens({
+        GITHUB_TOKEN1: 'token-1',
+        PAT_1: 'token-1',
+        PAT_2: 'pat-2',
+      }),
+    ).toEqual(['token-1', 'pat-2']);
+    expect(resolveTokens({})).toEqual(['']);
   });
 });
