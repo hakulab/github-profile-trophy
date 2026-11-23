@@ -17,6 +17,10 @@ export class Card {
     private noBackground: boolean,
     private noFrame: boolean,
   ) {
+    if (this.maxColumn !== -1) {
+      this.maxColumn = Math.max(1, this.maxColumn);
+    }
+    this.maxRow = Math.max(1, this.maxRow);
     this.width = panelSize * this.maxColumn + this.marginWidth * (this.maxColumn - 1);
   }
   render(userInfo: UserInfo, theme: Theme): string {
@@ -39,7 +43,7 @@ export class Card {
     trophyList.sortByRank();
 
     if (this.maxColumn === -1) {
-      this.maxColumn = trophyList.length;
+      this.maxColumn = Math.max(1, trophyList.length);
       this.width = this.panelSize * this.maxColumn + this.marginWidth * (this.maxColumn - 1);
     }
 

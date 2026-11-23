@@ -278,14 +278,14 @@ default repository owners, and access restrictions.
    rotation):
 
    ```sh
-   pnpm wrangler secret put GITHUB_TOKEN1
-   pnpm wrangler secret put GITHUB_TOKEN2
+   pnpm exec wrangler secret put GITHUB_TOKEN1
+   pnpm exec wrangler secret put GITHUB_TOKEN2
    ```
 
 4. Deploy the Worker:
 
    ```sh
-   pnpm deploy
+   pnpm run deploy
    ```
 
 5. Request your deployed endpoint:

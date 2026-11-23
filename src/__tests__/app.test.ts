@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { app, buildCacheKey, parseWhitelist, resolveRepoOwners } from '../app';
+import { Card } from '../card';
+import { Logger, setLoggingEnabled } from '../Helpers/Logger';
 import { GithubRepository } from '../Repository/GithubRepository';
+import { COLORS } from '../theme';
 import { EServiceKindError, ServiceError } from '../Types/index';
 import {
   UserInfo,
@@ -11,6 +14,7 @@ import {
   type GitHubUserPullRequest,
   type GitHubUserRepository,
 } from '../user_info';
+import { parseParams } from '../utils';
 
 function createMockUserInfo(): UserInfo {
   return UserInfo.fromCombined({
@@ -93,37 +97,6 @@ class StubGithubRepository extends GithubRepository {
 }
 
 describe('app', () => {
-  it('returns 400 HTML when username is missing', async () => {
-    const res = await app(new Request('https://trophy.example.com/'), { ENV_TYPE: 'test' });
-
-    expect(res.status).toBe(400);
-    expect(res.headers.get('Content-Type')).toBe('text/html');
-    const html = await res.text();
-    expect(html).toContain('"username" is a required query parameter');
-  });
-
-  it('returns 405 for non-GET/HEAD requests', async () => {
-    const res = await app(
-      new Request('https://trophy.example.com/?username=octocat', { method: 'POST' }),
-      { ENV_TYPE: 'test' },
-    );
-
-    expect(res.status).toBe(405);
-    expect(res.headers.get('Allow')).toBe('GET, HEAD');
-  });
-
-  it('returns 404 for /favicon.ico without calling GitHub', async () => {
-    const client = new StubGithubRepository(createMockUserInfo());
-    const res = await app(
-      new Request('https://trophy.example.com/favicon.ico'),
-      { ENV_TYPE: 'test' },
-      { client },
-    );
-
-    expect(res.status).toBe(404);
-    expect(client.requestUserInfoSpy).not.toHaveBeenCalled();
-  });
-
   it('renders an SVG trophy card and caches it via Cache API', async () => {
     const client = new StubGithubRepository(createMockUserInfo());
     const { cache } = createMockCache();
@@ -162,6 +135,83 @@ describe('app', () => {
     expect(client.requestUserInfoSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('returns empty body for HEAD requests on both cache miss and cache hit', async () => {
+    const client = new StubGithubRepository(createMockUserInfo());
+    const { cache, store } = createMockCache();
+
+    const miss = await app(
+      new Request('https://trophy.example.com/?username=octocat', { method: 'HEAD' }),
+      { ENV_TYPE: 'test' },
+      { client, cache },
+    );
+
+    expect(miss.status).toBe(200);
+    expect(miss.headers.get('Content-Type')).toBe('image/svg+xml');
+    expect(await miss.text()).toBe('');
+    expect(store.size).toBe(1);
+    expect(client.requestUserInfoSpy).toHaveBeenCalledTimes(1);
+
+    const hit = await app(
+      new Request('https://trophy.example.com/?username=Octocat', { method: 'HEAD' }),
+      { ENV_TYPE: 'test' },
+      { client, cache },
+    );
+
+    expect(hit.status).toBe(200);
+    expect(hit.headers.get('Content-Type')).toBe('image/svg+xml');
+    expect(await hit.text()).toBe('');
+    expect(client.requestUserInfoSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns 400 HTML with no-store when username is missing or blank', async () => {
+    const missing = await app(new Request('https://trophy.example.com/'), { ENV_TYPE: 'test' });
+
+    expect(missing.status).toBe(400);
+    expect(missing.headers.get('Content-Type')).toBe('text/html');
+    expect(missing.headers.get('Cache-Control')).toBe('no-store');
+    expect(await missing.text()).toContain('"username" is a required query parameter');
+
+    const blank = await app(new Request('https://trophy.example.com/?username=%20%20'), {
+      ENV_TYPE: 'test',
+    });
+
+    expect(blank.status).toBe(400);
+    expect(blank.headers.get('Cache-Control')).toBe('no-store');
+  });
+
+  it('escapes HTML special characters in the 400 base URL', async () => {
+    const res = await app(new Request('https://trophy.example.com/a&b\'c#"><script>'), {
+      ENV_TYPE: 'test',
+    });
+
+    expect(res.status).toBe(400);
+    const html = await res.text();
+    expect(html).toContain('https://trophy.example.com/a&amp;b&#39;c?username=USERNAME');
+    expect(html).not.toContain('"><script>');
+  });
+
+  it('returns 405 for non-GET/HEAD requests', async () => {
+    const res = await app(
+      new Request('https://trophy.example.com/?username=octocat', { method: 'POST' }),
+      { ENV_TYPE: 'test' },
+    );
+
+    expect(res.status).toBe(405);
+    expect(res.headers.get('Allow')).toBe('GET, HEAD');
+  });
+
+  it('returns 404 for /favicon.ico without calling GitHub', async () => {
+    const client = new StubGithubRepository(createMockUserInfo());
+    const res = await app(
+      new Request('https://trophy.example.com/favicon.ico'),
+      { ENV_TYPE: 'test' },
+      { client },
+    );
+
+    expect(res.status).toBe(404);
+    expect(client.requestUserInfoSpy).not.toHaveBeenCalled();
+  });
+
   it('returns ServiceError HTTP status and does not cache errors', async () => {
     const client = new StubGithubRepository(
       new ServiceError('User not found', EServiceKindError.NOT_FOUND),
@@ -180,51 +230,33 @@ describe('app', () => {
     expect(store.size).toBe(0);
   });
 
-  it('normalizes query parameter order in buildCacheKey', () => {
-    const a = buildCacheKey(new Request('https://trophy.example.com/?theme=dark&username=alice'));
-    const b = buildCacheKey(new Request('https://trophy.example.com/?username=alice&theme=dark'));
-    expect(a.url).toBe(b.url);
+  it('resets Logger enabled state on non-test requests after a test request', async () => {
+    const client = new StubGithubRepository(createMockUserInfo());
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      await app(
+        new Request('https://trophy.example.com/?username=octocat'),
+        { ENV_TYPE: 'test' },
+        { client },
+      );
+      Logger.error('suppressed');
+      expect(errorSpy).not.toHaveBeenCalled();
+
+      await app(new Request('https://trophy.example.com/?username=octocat'), {}, { client });
+      Logger.error('visible');
+      expect(errorSpy).toHaveBeenCalledWith('visible');
+    } finally {
+      setLoggingEnabled(false);
+      errorSpy.mockRestore();
+    }
   });
 
-  it('normalizes repo-owners and repo_owners aliases in buildCacheKey', () => {
-    const a = buildCacheKey(
-      new Request('https://trophy.example.com/?username=alice&repo-owners=org-b,Org-A,alice'),
-    );
-    const b = buildCacheKey(
-      new Request('https://trophy.example.com/?username=alice&repo_owners=%20org-a%20,%20org-b'),
-    );
-    const c = buildCacheKey(new Request('https://trophy.example.com/?username=alice'), {
-      DEFAULT_REPO_OWNERS: 'org-b, org-a',
-    });
-
-    expect(a.url).toBe(b.url);
-    expect(a.url).toBe(c.url);
-    expect(new URL(a.url).searchParams.get('repo-owners')).toBe('org-a,org-b');
-  });
-
-  it('isolates cache keys across distinct owner sets and explicit empty opt-out', () => {
-    const withDefault = buildCacheKey(new Request('https://trophy.example.com/?username=alice'), {
-      DEFAULT_REPO_OWNERS: 'org-a,org-b',
-    });
-    const optedOut = buildCacheKey(
-      new Request('https://trophy.example.com/?username=alice&repo-owners='),
-      { DEFAULT_REPO_OWNERS: 'org-a,org-b' },
-    );
-    const differentOwner = buildCacheKey(
-      new Request('https://trophy.example.com/?username=alice&repo-owners=org-a'),
-      { DEFAULT_REPO_OWNERS: 'org-a,org-b' },
-    );
-
-    expect(withDefault.url).not.toBe(optedOut.url);
-    expect(withDefault.url).not.toBe(differentOwner.url);
-    expect(optedOut.url).not.toContain('repo-owners=');
-  });
-
-  it('passes normalized repo-owners and DEFAULT_REPO_OWNERS fallback to client', async () => {
+  it('passes trimmed username and normalized repo-owners to client', async () => {
     const client = new StubGithubRepository(createMockUserInfo());
 
     await app(
-      new Request('https://trophy.example.com/?username=alice'),
+      new Request('https://trophy.example.com/?username=%20alice%20'),
       { ENV_TYPE: 'test', DEFAULT_REPO_OWNERS: 'org-b, Org-A, alice' },
       { client },
     );
@@ -245,14 +277,35 @@ describe('app', () => {
     expect(client.requestUserInfoSpy).toHaveBeenLastCalledWith('alice', []);
   });
 
-  it('caps additional repo-owners at MAX_ADDITIONAL_REPO_OWNERS', () => {
-    const owners = Array.from({ length: 15 }, (_, i) => `org${String(i).padStart(2, '0')}`).join(
-      ',',
-    );
+  it('caps additional repo-owners in caller order before sorting', () => {
+    const owners = [
+      'zeta',
+      'yankee',
+      'xray',
+      'whiskey',
+      'victor',
+      'uniform',
+      'tango',
+      'sierra',
+      'romeo',
+      'quebec',
+      'alpha',
+      'bravo',
+    ].join(',');
     const resolved = resolveRepoOwners(new URLSearchParams({ 'repo-owners': owners }), {}, 'alice');
     expect(resolved).toHaveLength(10);
-    expect(resolved[0]).toBe('org00');
-    expect(resolved[9]).toBe('org09');
+    expect(resolved).toEqual([
+      'quebec',
+      'romeo',
+      'sierra',
+      'tango',
+      'uniform',
+      'victor',
+      'whiskey',
+      'xray',
+      'yankee',
+      'zeta',
+    ]);
   });
 
   it('enforces WHITELIST case-insensitively and rejects unlisted usernames with 403 no-store', async () => {
@@ -293,5 +346,88 @@ describe('app', () => {
     );
     expect(res.status).toBe(200);
     expect(client.requestUserInfoSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('buildCacheKey', () => {
+  it('normalizes query parameter order', () => {
+    const a = buildCacheKey(new Request('https://trophy.example.com/?theme=dark&username=alice'));
+    const b = buildCacheKey(new Request('https://trophy.example.com/?username=alice&theme=dark'));
+    expect(a.url).toBe(b.url);
+  });
+
+  it('normalizes username casing', () => {
+    const lower = buildCacheKey(new Request('https://trophy.example.com/?username=alice'));
+    const upper = buildCacheKey(new Request('https://trophy.example.com/?username=Alice'));
+    expect(lower.url).toBe(upper.url);
+    expect(new URL(upper.url).searchParams.get('username')).toBe('alice');
+  });
+
+  it('normalizes repo-owners and repo_owners aliases', () => {
+    const a = buildCacheKey(
+      new Request('https://trophy.example.com/?username=alice&repo-owners=org-b,Org-A,alice'),
+    );
+    const b = buildCacheKey(
+      new Request('https://trophy.example.com/?username=alice&repo_owners=%20org-a%20,%20org-b'),
+    );
+    const c = buildCacheKey(new Request('https://trophy.example.com/?username=alice'), {
+      DEFAULT_REPO_OWNERS: 'org-b, org-a',
+    });
+
+    expect(a.url).toBe(b.url);
+    expect(a.url).toBe(c.url);
+    expect(new URL(a.url).searchParams.get('repo-owners')).toBe('org-a,org-b');
+  });
+
+  it('isolates cache keys across distinct owner sets and explicit empty opt-out', () => {
+    const withDefault = buildCacheKey(new Request('https://trophy.example.com/?username=alice'), {
+      DEFAULT_REPO_OWNERS: 'org-a,org-b',
+    });
+    const optedOut = buildCacheKey(
+      new Request('https://trophy.example.com/?username=alice&repo-owners='),
+      { DEFAULT_REPO_OWNERS: 'org-a,org-b' },
+    );
+    const differentOwner = buildCacheKey(
+      new Request('https://trophy.example.com/?username=alice&repo-owners=org-a'),
+      { DEFAULT_REPO_OWNERS: 'org-a,org-b' },
+    );
+
+    expect(withDefault.url).not.toBe(optedOut.url);
+    expect(withDefault.url).not.toBe(differentOwner.url);
+    expect(optedOut.url).not.toContain('repo-owners=');
+  });
+});
+
+describe('parseParams', () => {
+  it('parses query parameters containing literal question marks via URL.searchParams', () => {
+    const params = parseParams(
+      new Request('https://trophy.example.com/?username=octocat&title=a?b&theme=dracula'),
+    );
+
+    expect(params.get('username')).toBe('octocat');
+    expect(params.get('title')).toBe('a?b');
+    expect(params.get('theme')).toBe('dracula');
+  });
+});
+
+describe('Card', () => {
+  it('clamps zero or negative column and row values without NaN SVG coordinates', () => {
+    const svg = new Card([], [], 0, 0, 110, 0, 0, false, false).render(
+      createMockUserInfo(),
+      COLORS.default,
+    );
+
+    expect(svg).toContain('<svg');
+    expect(svg).toContain('width="110"');
+    expect(svg).toContain('height="110"');
+    expect(svg).not.toContain('NaN');
+
+    const emptyAutoColumn = new Card(['NonExistent'], [], -1, 3, 110, 10, 10, false, false).render(
+      createMockUserInfo(),
+      COLORS.default,
+    );
+
+    expect(emptyAutoColumn).toContain('width="110"');
+    expect(emptyAutoColumn).not.toContain('NaN');
   });
 });

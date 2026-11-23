@@ -125,12 +125,14 @@ export class UserInfo {
         : earliest;
     }, earliestRepoDate);
 
-    const durationTime = new Date().getTime() - new Date(earliestRepoDate).getTime();
+    const earliestDate = new Date(earliestRepoDate);
+    const earliestYear = earliestDate.getUTCFullYear();
+    const durationTime = new Date().getTime() - earliestDate.getTime();
     const durationYear = new Date(durationTime).getUTCFullYear() - 1970;
     const durationDays = Math.floor(durationTime / (1000 * 60 * 60 * 24) / 100);
-    const ancientAccount = new Date(earliestRepoDate).getFullYear() <= 2010 ? 1 : 0;
-    const joined2020 = new Date(earliestRepoDate).getFullYear() === 2020 ? 1 : 0;
-    const ogAccount = new Date(earliestRepoDate).getFullYear() <= 2008 ? 1 : 0;
+    const ancientAccount = earliestYear <= 2010 ? 1 : 0;
+    const joined2020 = earliestYear === 2020 ? 1 : 0;
+    const ogAccount = earliestYear <= 2008 ? 1 : 0;
 
     this.totalCommits = totalCommits;
     this.totalFollowers = userActivity.followers.totalCount;

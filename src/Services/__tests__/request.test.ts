@@ -35,6 +35,25 @@ describe('requestGithubData', () => {
     }
   });
 
+  it('maps unexpected non-404 HTTP errors without data to 502 UPSTREAM', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: 'Bad credentials' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await expect(
+      requestGithubData('query { viewer { login } }', {}, { fetchImpl: fetchMock }),
+    ).rejects.toSatisfy((error: unknown) => {
+      expect(error).toBeInstanceOf(ServiceError);
+      const serviceError = error as ServiceError;
+      expect(serviceError.cause).toBe(EServiceKindError.UPSTREAM);
+      expect(serviceError.code).toBe(502);
+      return true;
+    });
+  });
+
   it('uses custom apiUrl and Authorization header when token is provided', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
       new Response(JSON.stringify({ data: { user: { login: 'octocat' } } }), {
