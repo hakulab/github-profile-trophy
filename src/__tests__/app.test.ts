@@ -188,36 +188,31 @@ describe('app', () => {
 
   it('normalizes repo-owners and repo_owners aliases in buildCacheKey', () => {
     const a = buildCacheKey(
-      new Request(
-        'https://trophy.example.com/?username=hakula139&repo-owners=hakulattic,HakuLab,hakula139',
-      ),
+      new Request('https://trophy.example.com/?username=alice&repo-owners=org-b,Org-A,alice'),
     );
     const b = buildCacheKey(
-      new Request(
-        'https://trophy.example.com/?username=hakula139&repo_owners=%20hakulab%20,%20hakulattic',
-      ),
+      new Request('https://trophy.example.com/?username=alice&repo_owners=%20org-a%20,%20org-b'),
     );
-    const c = buildCacheKey(new Request('https://trophy.example.com/?username=hakula139'), {
-      DEFAULT_REPO_OWNERS: 'hakulattic, hakulab',
+    const c = buildCacheKey(new Request('https://trophy.example.com/?username=alice'), {
+      DEFAULT_REPO_OWNERS: 'org-b, org-a',
     });
 
     expect(a.url).toBe(b.url);
     expect(a.url).toBe(c.url);
-    expect(new URL(a.url).searchParams.get('repo-owners')).toBe('hakulab,hakulattic');
+    expect(new URL(a.url).searchParams.get('repo-owners')).toBe('org-a,org-b');
   });
 
   it('isolates cache keys across distinct owner sets and explicit empty opt-out', () => {
-    const withDefault = buildCacheKey(
-      new Request('https://trophy.example.com/?username=hakula139'),
-      { DEFAULT_REPO_OWNERS: 'hakulab,hakulattic' },
-    );
+    const withDefault = buildCacheKey(new Request('https://trophy.example.com/?username=alice'), {
+      DEFAULT_REPO_OWNERS: 'org-a,org-b',
+    });
     const optedOut = buildCacheKey(
-      new Request('https://trophy.example.com/?username=hakula139&repo-owners='),
-      { DEFAULT_REPO_OWNERS: 'hakulab,hakulattic' },
+      new Request('https://trophy.example.com/?username=alice&repo-owners='),
+      { DEFAULT_REPO_OWNERS: 'org-a,org-b' },
     );
     const differentOwner = buildCacheKey(
-      new Request('https://trophy.example.com/?username=hakula139&repo-owners=hakulab'),
-      { DEFAULT_REPO_OWNERS: 'hakulab,hakulattic' },
+      new Request('https://trophy.example.com/?username=alice&repo-owners=org-a'),
+      { DEFAULT_REPO_OWNERS: 'org-a,org-b' },
     );
 
     expect(withDefault.url).not.toBe(optedOut.url);
@@ -229,31 +224,25 @@ describe('app', () => {
     const client = new StubGithubRepository(createMockUserInfo());
 
     await app(
-      new Request('https://trophy.example.com/?username=hakula139'),
-      { ENV_TYPE: 'test', DEFAULT_REPO_OWNERS: 'hakulattic, HakuLab, hakula139' },
+      new Request('https://trophy.example.com/?username=alice'),
+      { ENV_TYPE: 'test', DEFAULT_REPO_OWNERS: 'org-b, Org-A, alice' },
       { client },
     );
-    expect(client.requestUserInfoSpy).toHaveBeenLastCalledWith('hakula139', [
-      'hakulab',
-      'hakulattic',
-    ]);
+    expect(client.requestUserInfoSpy).toHaveBeenLastCalledWith('alice', ['org-a', 'org-b']);
 
     await app(
-      new Request('https://trophy.example.com/?username=hakula139&repo_owners=Beta-Org,alpha-org'),
-      { ENV_TYPE: 'test', DEFAULT_REPO_OWNERS: 'hakulab' },
+      new Request('https://trophy.example.com/?username=alice&repo_owners=Beta-Org,alpha-org'),
+      { ENV_TYPE: 'test', DEFAULT_REPO_OWNERS: 'org-a' },
       { client },
     );
-    expect(client.requestUserInfoSpy).toHaveBeenLastCalledWith('hakula139', [
-      'alpha-org',
-      'beta-org',
-    ]);
+    expect(client.requestUserInfoSpy).toHaveBeenLastCalledWith('alice', ['alpha-org', 'beta-org']);
 
     await app(
-      new Request('https://trophy.example.com/?username=hakula139&repo-owners='),
-      { ENV_TYPE: 'test', DEFAULT_REPO_OWNERS: 'hakulab' },
+      new Request('https://trophy.example.com/?username=alice&repo-owners='),
+      { ENV_TYPE: 'test', DEFAULT_REPO_OWNERS: 'org-a' },
       { client },
     );
-    expect(client.requestUserInfoSpy).toHaveBeenLastCalledWith('hakula139', []);
+    expect(client.requestUserInfoSpy).toHaveBeenLastCalledWith('alice', []);
   });
 
   it('caps additional repo-owners at MAX_ADDITIONAL_REPO_OWNERS', () => {

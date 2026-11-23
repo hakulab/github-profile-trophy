@@ -140,13 +140,13 @@ describe('GithubApiService', () => {
         totalCount: 12,
         nodes: [
           {
-            nameWithOwner: 'hakula139/repo-a',
+            nameWithOwner: 'alice/repo-a',
             languages: { nodes: [{ name: 'TypeScript' }, { name: 'Nix' }] },
             stargazerCount: 50,
             createdAt: '2019-05-01T00:00:00Z',
           },
           {
-            nameWithOwner: 'hakula139/repo-b',
+            nameWithOwner: 'alice/repo-b',
             languages: { nodes: [{ name: 'Rust' }] },
             stargazerCount: 10,
             createdAt: '2020-05-01T00:00:00Z',
@@ -165,8 +165,8 @@ describe('GithubApiService', () => {
       { retryDelay: 0, fetchImpl: fetchMock },
     );
 
-    const single = await provider.requestUserInfo('hakula139');
-    const selfOnly = await provider.requestUserInfo('hakula139', ['HAKULA139']);
+    const single = await provider.requestUserInfo('alice');
+    const selfOnly = await provider.requestUserInfo('alice', ['ALICE']);
 
     expect(single).toBeInstanceOf(UserInfo);
     expect(selfOnly).toBeInstanceOf(UserInfo);
@@ -194,7 +194,7 @@ describe('GithubApiService', () => {
         totalCount: 3,
         nodes: [
           {
-            nameWithOwner: 'hakula139/top-repo',
+            nameWithOwner: 'alice/top-repo',
             languages: { nodes: [{ name: 'TypeScript' }] },
             stargazerCount: 40,
             createdAt: '2019-01-01T00:00:00Z',
@@ -213,7 +213,7 @@ describe('GithubApiService', () => {
         return jsonResponse({ data: { user: primaryUser } });
       }
 
-      if (body.variables.login === 'hakula139' && !body.variables.after) {
+      if (body.variables.login === 'alice' && !body.variables.after) {
         return jsonResponse({
           data: {
             repositoryOwner: {
@@ -221,8 +221,8 @@ describe('GithubApiService', () => {
                 totalCount: 3,
                 pageInfo: { hasNextPage: true, endCursor: 'cursor-1' },
                 nodes: [
-                  { nameWithOwner: 'hakula139/top-repo', stargazerCount: 40 },
-                  { nameWithOwner: 'hakula139/second-repo', stargazerCount: 15 },
+                  { nameWithOwner: 'alice/top-repo', stargazerCount: 40 },
+                  { nameWithOwner: 'alice/second-repo', stargazerCount: 15 },
                 ],
               },
             },
@@ -230,21 +230,21 @@ describe('GithubApiService', () => {
         });
       }
 
-      if (body.variables.login === 'hakula139' && body.variables.after === 'cursor-1') {
+      if (body.variables.login === 'alice' && body.variables.after === 'cursor-1') {
         return jsonResponse({
           data: {
             repositoryOwner: {
               repositories: {
                 totalCount: 3,
                 pageInfo: { hasNextPage: false, endCursor: null },
-                nodes: [{ nameWithOwner: 'hakula139/third-repo', stargazerCount: 5 }],
+                nodes: [{ nameWithOwner: 'alice/third-repo', stargazerCount: 5 }],
               },
             },
           },
         });
       }
 
-      if (body.variables.login === 'hakulab') {
+      if (body.variables.login === 'acme-org') {
         return jsonResponse({
           data: {
             repositoryOwner: {
@@ -252,9 +252,9 @@ describe('GithubApiService', () => {
                 totalCount: 5,
                 pageInfo: { hasNextPage: true, endCursor: 'zero-star-tail' },
                 nodes: [
-                  { nameWithOwner: 'hakulab/project-one', stargazerCount: 25 },
-                  { nameWithOwner: 'HAKULA139/top-repo', stargazerCount: 40 },
-                  { nameWithOwner: 'hakulab/zero-star', stargazerCount: 0 },
+                  { nameWithOwner: 'acme-org/project-one', stargazerCount: 25 },
+                  { nameWithOwner: 'ALICE/top-repo', stargazerCount: 40 },
+                  { nameWithOwner: 'acme-org/zero-star', stargazerCount: 0 },
                 ],
               },
             },
@@ -262,7 +262,7 @@ describe('GithubApiService', () => {
         });
       }
 
-      if (body.variables.login === 'hakulattic') {
+      if (body.variables.login === 'acme-archive') {
         return jsonResponse({
           data: {
             repositoryOwner: {
@@ -270,8 +270,8 @@ describe('GithubApiService', () => {
                 totalCount: 2,
                 pageInfo: { hasNextPage: false, endCursor: null },
                 nodes: [
-                  { nameWithOwner: 'hakulattic/archive-one', stargazerCount: 12 },
-                  { nameWithOwner: 'hakulattic/archive-two', stargazerCount: 3 },
+                  { nameWithOwner: 'acme-archive/archive-one', stargazerCount: 12 },
+                  { nameWithOwner: 'acme-archive/archive-two', stargazerCount: 3 },
                 ],
               },
             },
@@ -287,11 +287,11 @@ describe('GithubApiService', () => {
       { retryDelay: 0, fetchImpl: fetchMock },
     );
 
-    const result = await provider.requestUserInfo('hakula139', [
-      'hakulattic',
-      'HakuLab',
-      'hakula139',
-      'hakulab',
+    const result = await provider.requestUserInfo('alice', [
+      'acme-archive',
+      'Acme-Org',
+      'alice',
+      'acme-org',
     ]);
 
     expect(result).toBeInstanceOf(UserInfo);
@@ -334,14 +334,14 @@ describe('GithubApiService', () => {
         return jsonResponse({ data: { user: primaryUser } });
       }
 
-      if (body.variables.login === 'hakula139') {
+      if (body.variables.login === 'alice') {
         return jsonResponse({
           data: {
             repositoryOwner: {
               repositories: {
                 totalCount: 1,
                 pageInfo: { hasNextPage: false, endCursor: null },
-                nodes: [{ nameWithOwner: 'hakula139/only', stargazerCount: 1 }],
+                nodes: [{ nameWithOwner: 'alice/only', stargazerCount: 1 }],
               },
             },
           },
@@ -356,7 +356,7 @@ describe('GithubApiService', () => {
       { retryDelay: 0, fetchImpl: fetchMock },
     );
 
-    const error = await provider.requestUserInfo('hakula139', ['missing-org']);
+    const error = await provider.requestUserInfo('alice', ['missing-org']);
 
     expect(error).toBeInstanceOf(ServiceError);
     expect((error as ServiceError).code).toBe(404);
@@ -389,14 +389,14 @@ describe('GithubApiService', () => {
         return jsonResponse({ data: { user: primaryUser } });
       }
 
-      if (body.variables.login === 'hakula139') {
+      if (body.variables.login === 'alice') {
         return jsonResponse({
           data: {
             repositoryOwner: {
               repositories: {
                 totalCount: 1,
                 pageInfo: { hasNextPage: false, endCursor: null },
-                nodes: [{ nameWithOwner: 'hakula139/only', stargazerCount: 1 }],
+                nodes: [{ nameWithOwner: 'alice/only', stargazerCount: 1 }],
               },
             },
           },
@@ -411,7 +411,7 @@ describe('GithubApiService', () => {
       { retryDelay: 0, fetchImpl: fetchMock },
     );
 
-    const error = await provider.requestUserInfo('hakula139', ['hakulab']);
+    const error = await provider.requestUserInfo('alice', ['acme-org']);
 
     expect(error).toBeInstanceOf(ServiceError);
     expect((error as ServiceError).code).toBe(419);
