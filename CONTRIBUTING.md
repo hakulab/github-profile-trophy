@@ -2,72 +2,62 @@
 
 ## Environment
 
-- Deno >= v1.36.1
-- [Vercel](https://vercel.com/)
-- GitHub API v4
-- Docker and Docker compose (optional)
+- Node.js and pnpm (or enter the Nix dev shell with `nix develop`)
+- [Cloudflare Workers](https://workers.cloudflare.com/) (`wrangler`)
+- GitHub GraphQL API v4
 
 ## Local Run
 
-Create `.env` file to project root directory, and write your GitHub token to the
-`.env` file. Please select the authority of `repo` when creating token.
+Create a `.dev.vars` file in the project root directory and add your GitHub
+token (see [env-example](./env-example)). Grant the `read:user` and
+`public_repo` scopes (or `repo` to include private contributions).
 
 ```properties
 GITHUB_TOKEN1=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 GITHUB_TOKEN2=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-# if using GitHub Enterprise:
-# (this env var defaults to https://api.github.com/graphql)
+# Optional, when using GitHub Enterprise:
+# (defaults to https://api.github.com/graphql)
 GITHUB_API=https://github.example.com/api/graphql
 ```
 
-Run local server.
+Run the local Workers dev server:
 
 ```sh
-deno task start
+pnpm dev
 ```
 
-You can enable the Redis if you want, but it's not mandatory.
+Open localhost from your browser:
 
-```sh
-docker compose up -d
-```
-
-Rename `env-example` to `.env`, and change ENABLE_REDIS to true
-
-Open localhost from your browser.
-
-http://localhost:8080/?username=ryo-ma
+<http://localhost:8787/?username=ryo-ma>
 
 ## Editor config
 
-Read the [.editorconfig](./.editorconfig)
+Read [.editorconfig](./.editorconfig).
 
 ## Pull Requests
 
-Pull requests are always welcome! In general, they should a single concern in
-the least number of changed lines as possible. For changes that address core
-functionality, it is best to open an issue to discuss your proposal first. I
-look forward to seeing what you come up with!
-
-## Run deno lint
+Pull requests are always welcome. In general, they should address a single
+concern in as few changed lines as possible. For changes that address core
+functionality, it is best to open an issue to discuss your proposal first.
 
 ## What to do before contributing
 
-### 1. Run deno lint
+### 1. Run lint and typecheck
 
 ```sh
-deno task lint
+pnpm lint
+pnpm typecheck
 ```
 
-### 2. Run deno format
+### 2. Run pre-commit hooks
 
 ```sh
-deno task format
+nix develop -c run-hooks
 ```
 
-### 3. Run deno test
+### 3. Run tests
 
 ```sh
-deno task test
+pnpm test
 ```

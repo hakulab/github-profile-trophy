@@ -38,19 +38,7 @@
         preCommit = dk.preCommit {
           src = ./.;
           hooks = {
-            dprint.excludes = [
-              "^CONTRIBUTING\\.md$"
-              "^README\\.md$"
-            ];
-            editorconfig-checker.excludes = [
-              "^CONTRIBUTING\\.md$"
-              "^README\\.md$"
-            ];
             eslint.enable = true;
-            markdownlint-cli2.excludes = [
-              "^CONTRIBUTING\\.md$"
-              "^README\\.md$"
-            ];
             prettier.enable = true;
             taplo.enable = true;
             tsc.enable = true;

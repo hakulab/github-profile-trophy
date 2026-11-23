@@ -1,6 +1,7 @@
 {
   "version": "0.2",
   "language": "en",
+  "enableGlobDot": true,
   "useGitignore": true,
   "gitignoreRoot": ".",
   "dictionaryDefinitions": [
@@ -11,11 +12,5 @@
     }
   ],
   "dictionaries": ["project-words"],
-  "ignorePaths": [
-    "CONTRIBUTING.md",
-    "README.md",
-    "flake.lock",
-    "pnpm-lock.yaml",
-    "src/Services/__mocks__/**"
-  ]
+  "ignorePaths": [".git", "flake.lock", "pnpm-lock.yaml", "src/Services/__mocks__/**"]
 }

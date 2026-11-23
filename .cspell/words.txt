@@ -29,3 +29,4 @@ taplo
 tokyonight
 vitest
 workerd
+worktrees
