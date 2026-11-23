@@ -71,10 +71,9 @@ export const CONSTANTS = {
 };
 
 /**
- * Parse, normalize, deduplicate, cap, and sort additional repository owner logins.
- * Excludes the primary username (case-insensitively) so its repositories are
- * never fetched twice, preserves caller order when capping at `maxOwners`, and
- * sorts the kept logins for canonical cache keys.
+ * Normalize additional repository owner logins: split, trim, lowercase,
+ * exclude `primaryUsername`, deduplicate, cap at `maxOwners` in caller order,
+ * and sort lexicographically.
  */
 export function normalizeRepoOwners(
   rawValues: string[],

@@ -82,11 +82,14 @@ export async function requestGithubData<T = unknown>(
 function getGraphQLErrorKind(errors: GithubError[]): EServiceKindError {
   const errorTypes = errors.map((error) => error.type);
 
-  if (errorTypes.some((type) => type.includes(EServiceKindError.RATE_LIMIT))) {
+  if (errorTypes.some((type) => type?.includes(EServiceKindError.RATE_LIMIT))) {
     return EServiceKindError.RATE_LIMIT;
   }
 
-  if (errorTypes.every((type) => type === (EServiceKindError.NOT_FOUND as string))) {
+  if (
+    errors.length > 0 &&
+    errorTypes.every((type) => type === (EServiceKindError.NOT_FOUND as string))
+  ) {
     return EServiceKindError.NOT_FOUND;
   }
 

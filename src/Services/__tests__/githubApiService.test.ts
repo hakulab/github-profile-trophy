@@ -507,6 +507,7 @@ describe('GithubApiService', () => {
 
     expect(result).not.toBeInstanceOf(ServiceError);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((result as { totalCount: number; nodes: unknown[] }).nodes).toHaveLength(1);
   });
 
   it('caps owner repository pagination at MAX_OWNER_REPO_PAGES', async () => {

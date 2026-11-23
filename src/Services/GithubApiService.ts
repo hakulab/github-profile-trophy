@@ -96,6 +96,7 @@ export class GithubApiService extends GithubRepository {
     login: string,
   ): Promise<{ totalCount: number; nodes: RepositoryOwnerSummaryNode[] } | ServiceError> {
     const nodes: RepositoryOwnerSummaryNode[] = [];
+    const seen = new Set<string>();
     let after: string | null = null;
     let totalCount = 0;
 
@@ -116,12 +117,23 @@ export class GithubApiService extends GithubRepository {
         );
       }
 
-      totalCount = owner.repositories.totalCount;
-      nodes.push(...owner.repositories.nodes);
-
       const hasNextPage: boolean = owner.repositories.pageInfo.hasNextPage;
       const nextCursor: string | null = owner.repositories.pageInfo.endCursor;
-      if (!hasNextPage || !nextCursor || nextCursor === after) {
+      if (after !== null && nextCursor === after) {
+        return { totalCount, nodes };
+      }
+
+      totalCount = owner.repositories.totalCount;
+      for (const repo of owner.repositories.nodes) {
+        const key = repo.nameWithOwner.toLowerCase();
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        nodes.push(repo);
+      }
+
+      if (!hasNextPage || !nextCursor) {
         return { totalCount, nodes };
       }
       after = nextCursor;

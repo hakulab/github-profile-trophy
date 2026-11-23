@@ -111,7 +111,8 @@ export async function app(
   }
 
   const params = parseParams(req);
-  const username = params.get('username');
+  const rawUsername = params.get('username')?.trim() ?? '';
+  const username = rawUsername.length > 0 ? rawUsername : null;
   const row = params.getNumberValue('row', CONSTANTS.DEFAULT_MAX_ROW);
   const column = params.getNumberValue('column', CONSTANTS.DEFAULT_MAX_COLUMN);
   const themeParam = params.getStringValue('theme', 'default');
@@ -171,7 +172,7 @@ export async function app(
   }
 
   const whitelist = parseWhitelist(env);
-  if (whitelist && !whitelist.has(username.trim().toLowerCase())) {
+  if (whitelist && !whitelist.has(username.toLowerCase())) {
     const error = new Error403('This username is not whitelisted on this instance.');
     return new Response(isHead ? null : error.render(), {
       status: error.status,

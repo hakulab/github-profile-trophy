@@ -10,8 +10,6 @@ permissions:
 
 jobs:
   deploy:
-    permissions:
-      contents: read
     uses: hakulab/devkit/.github/workflows/workers-deploy.yml@v3
     secrets:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
